@@ -482,11 +482,15 @@ fun ShiftYarApp(context: Context) {
 
                         OutlinedTextField(
                             value = date,
-                            onValueChange = { date = it.filter(Char::isDigit).take(2) },
+                            onValueChange = {
+                                date = it.filter(Char::isDigit).take(2)
+                            },
                             label = { Text("شماره روز ماه") },
                             placeholder = { Text("مثلاً ۱۵") },
                             supportingText = {
-                                Text("سال و ماه را از بالا انتخاب کنید؛ روز هفته خودکار نمایش داده می‌شود.")
+                                Text(
+                                    "سال و ماه را از بالا انتخاب کنید؛ روز هفته خودکار نمایش داده می‌شود."
+                                )
                             },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true
@@ -495,7 +499,8 @@ fun ShiftYarApp(context: Context) {
                         val previewDate =
                             "${year.trim()}/${month.toIntOrNull()?.toString()?.padStart(2, '0') ?: "01"}/${date.toIntOrNull()?.toString()?.padStart(2, '0') ?: "01"}"
 
-                        if (date.toIntOrNull() in 1..31 &&
+                        if (
+                            date.toIntOrNull() in 1..31 &&
                             year.toIntOrNull() != null &&
                             month.toIntOrNull() in 1..12
                         ) {
@@ -547,13 +552,11 @@ fun ShiftYarApp(context: Context) {
                                 val monthNumber = month.toIntOrNull()
                                 val yearNumber = year.toIntOrNull()
                                 val validMonth = monthNumber in 1..12
-                                val maxDay = if (monthNumber in 1..6) {
-                                    31
-                                } else if (monthNumber in 7..11) {
-                                    30
-                                } else {
-                                    30
-                                }
+                                val maxDay =
+                                    if (monthNumber in 1..6) 31
+                                    else if (monthNumber in 7..11) 30
+                                    else 30
+
                                 val validDate =
                                     dayNumber != null && dayNumber in 1..maxDay
 
@@ -642,7 +645,13 @@ fun ShiftYarApp(context: Context) {
 
                         OutlinedButton(
                             onClick = {
-                                exportMonthlyPdf(context, shifts, year, month, baseName)
+                                exportMonthlyPdf(
+                                    context,
+                                    shifts,
+                                    year,
+                                    month,
+                                    baseName
+                                )
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -651,18 +660,37 @@ fun ShiftYarApp(context: Context) {
 
                         HorizontalDivider()
 
-                        Text(
-                            "شیفت‌های ثبت‌شده",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-
                         val filtered = shifts.filter {
                             val p = it.date.split("/")
                             p.size == 3 &&
                                 p[0] == year &&
                                 p[1].toIntOrNull() == month.toIntOrNull()
                         }.sortedBy { it.date }
+
+                        Text(
+                            "تقویم ماهانه شیفت‌ها",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Navy
+                        )
+
+                        MonthlyShiftCalendar(
+                            year = year.toIntOrNull() ?: 1405,
+                            month = month.toIntOrNull() ?: 1,
+                            shifts = filtered,
+                            onSelectDay = { selectedDay ->
+                                date = selectedDay.toString()
+                            }
+                        )
+
+                        HorizontalDivider()
+
+                        Text(
+                            "جدول کامل شیفت‌های ماه",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Navy
+                        )
 
                         if (filtered.isEmpty()) {
                             Text("برای این ماه هنوز شیفتی ثبت نشده است.")
@@ -710,6 +738,7 @@ fun ShiftYarApp(context: Context) {
                                         ) {
                                             Text("ویرایش")
                                         }
+
                                         TextButton(
                                             onClick = {
                                                 shifts.removeAt(actualIndex)
@@ -737,7 +766,9 @@ fun ShiftYarApp(context: Context) {
             onDismissRequest = { showContact = false },
             title = { Text("تماس با ما") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text("حسین شیخی")
                     Text("کارشناس ارشد پرستاری اورژانس")
                     Text("سمنان")
@@ -774,6 +805,140 @@ fun ShiftYarApp(context: Context) {
                 }
             }
         )
+    }
+}
+
+@Composable
+fun MonthlyShiftCalendar(
+    year: Int,
+    month: Int,
+    shifts: List<ShiftEntry>,
+    onSelectDay: (Int) -> Unit
+) {
+    val monthNumber = month.coerceIn(1, 12)
+    val maxDay =
+        if (monthNumber <= 6) 31
+        else if (monthNumber <= 11) 30
+        else 30
+
+    val firstWeekday = remember(year, monthNumber) {
+        val name = weekdayForJalali(
+            "$year/${monthNumber.toString().padStart(2, '0')}/01"
+        )
+        when (name) {
+            "شنبه" -> 0
+            "یکشنبه" -> 1
+            "دوشنبه" -> 2
+            "سه‌شنبه" -> 3
+            "چهارشنبه" -> 4
+            "پنجشنبه" -> 5
+            "جمعه" -> 6
+            else -> 0
+        }
+    }
+
+    val byDay = shifts.groupBy {
+        it.date.substringAfterLast("/").toIntOrNull() ?: -1
+    }
+
+    val totalCells = ((firstWeekday + maxDay + 6) / 7) * 7
+    val weekNames = listOf("ش", "ی", "د", "س", "چ", "پ", "ج")
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
+        Column(
+            modifier = Modifier.padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Row(Modifier.fillMaxWidth()) {
+                weekNames.forEach { dayName ->
+                    Box(
+                        Modifier.weight(1f).padding(2.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            dayName,
+                            color = Navy,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            for (row in 0 until totalCells / 7) {
+                Row(Modifier.fillMaxWidth()) {
+                    for (col in 0..6) {
+                        val day = row * 7 + col - firstWeekday + 1
+
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .padding(2.dp)
+                                .heightIn(min = 74.dp)
+                        ) {
+                            if (day in 1..maxDay) {
+                                val dayShifts = byDay[day].orEmpty()
+
+                                Card(
+                                    onClick = { onSelectDay(day) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (dayShifts.isEmpty()) {
+                                            PaleBlue
+                                        } else {
+                                            Color(0xFFDDF4E8)
+                                        }
+                                    )
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(4.dp),
+                                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                                    ) {
+                                        Text(
+                                            day.toString(),
+                                            color = Navy,
+                                            fontWeight = FontWeight.Bold
+                                        )
+
+                                        dayShifts.take(2).forEach { shift ->
+                                            Text(
+                                                shift.type,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = Teal,
+                                                maxLines = 1
+                                            )
+                                            Text(
+                                                shift.first,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                maxLines = 1
+                                            )
+                                            Text(
+                                                shift.second,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                maxLines = 1
+                                            )
+                                        }
+
+                                        if (dayShifts.size > 2) {
+                                            Text(
+                                                "+${dayShifts.size - 2}",
+                                                style = MaterialTheme.typography.labelSmall
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -905,9 +1070,21 @@ fun jalaliToGregorian(jy: Int, jm: Int, jd: Int): IntArray {
 
     var gd = days + 1
     val leap = gy % 4 == 0 && (gy % 100 != 0 || gy % 400 == 0)
+
     val monthDays = intArrayOf(
-        0, 31, if (leap) 29 else 28, 31, 30, 31, 30,
-        31, 31, 30, 31, 30, 31
+        0,
+        31,
+        if (leap) 29 else 28,
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31
     )
 
     var gm = 1
@@ -928,7 +1105,8 @@ fun exportMonthlyPdf(
 ) {
     val filtered = shifts.filter {
         val p = it.date.split("/")
-        p.size == 3 && p[0].toIntOrNull() == year.toIntOrNull() &&
+        p.size == 3 &&
+            p[0].toIntOrNull() == year.toIntOrNull() &&
             p[1].toIntOrNull() == month.toIntOrNull()
     }.sortedBy {
         val p = it.date.split("/")
@@ -944,7 +1122,8 @@ fun exportMonthlyPdf(
         return
     }
 
-    fun esc(value: String) = value.replace("&", "&amp;")
+    fun esc(value: String) = value
+        .replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
 
@@ -960,22 +1139,54 @@ fun exportMonthlyPdf(
     val html = """
         <!doctype html>
         <html lang="fa" dir="rtl">
-        <head><meta charset="UTF-8">
+        <head>
+        <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
         @page { size: A4 landscape; margin: 14mm; }
-        body { font-family: sans-serif; direction: rtl; color: #18324d; }
-        h1 { text-align:center; color:#123A67; font-size:22px; }
-        .sub { text-align:center; margin-bottom:20px; }
-        table { width:100%; border-collapse:collapse; }
-        th { background:#123A67; color:white; padding:10px; }
-        td { border:1px solid #b8c8d8; padding:9px; text-align:center; }
-        tr:nth-child(even) { background:#edf5fb; }
-        span { color:#087f78; font-weight:bold; }
-        </style></head>
+        body {
+            font-family: sans-serif;
+            direction: rtl;
+            color: #18324d;
+        }
+        h1 {
+            text-align: center;
+            color: #123A67;
+            font-size: 22px;
+        }
+        .sub {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th {
+            background: #123A67;
+            color: white;
+            padding: 10px;
+        }
+        td {
+            border: 1px solid #b8c8d8;
+            padding: 9px;
+            text-align: center;
+        }
+        tr:nth-child(even) {
+            background: #edf5fb;
+        }
+        span {
+            color: #087f78;
+            font-weight: bold;
+        }
+        </style>
+        </head>
         <body>
         <h1>گزارش ماهانه شیفت‌یار اورژانس ۱۱۵</h1>
-        <div class="sub">پایگاه: ${esc(baseName.ifBlank { "ثبت نشده" })} | ماه: ${esc(year)}/${esc(month)}</div>
+        <div class="sub">
+            پایگاه: ${esc(baseName.ifBlank { "ثبت نشده" })} |
+            ماه: ${esc(year)}/${esc(month)}
+        </div>
         <table>
           <thead>
             <tr>
@@ -987,7 +1198,8 @@ fun exportMonthlyPdf(
           </thead>
           <tbody>$rows</tbody>
         </table>
-        </body></html>
+        </body>
+        </html>
     """.trimIndent()
 
     val printManager =
@@ -1004,11 +1216,13 @@ fun exportMonthlyPdf(
 
     val webView = WebView(context)
     webView.settings.defaultTextEncodingName = "UTF-8"
+
     webView.webViewClient = object : WebViewClient() {
         override fun onPageFinished(view: WebView, url: String?) {
             val adapter = view.createPrintDocumentAdapter(
                 "ShiftYar-${year}-${month}"
             )
+
             printManager.print(
                 "گزارش شیفت‌یار ${year}/${month}",
                 adapter,
