@@ -1,34 +1,53 @@
 
 package com.example.shiftyar115
 
+import android.content.ContentValues
 import android.content.Context
+import android.graphics.Paint
+import android.graphics.pdf.PdfDocument
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContent {
-            MaterialTheme {
-                ShiftYarApp(applicationContext)
-            }
-        }
-    }
-}
 
 data class Shift(
     val date: String,
@@ -37,53 +56,258 @@ data class Shift(
     val description: String
 )
 
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            MaterialTheme {
+                ShiftYarApp(this)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShiftYarApp(context: Context) {
-    val prefs = remember {
+    val preferences = remember {
         context.getSharedPreferences("shift_yar_data", Context.MODE_PRIVATE)
     }
 
     var baseName by remember {
-        mutableStateOf(prefs.getString("base_name", "") ?: "")
+        mutableStateOf(preferences.getString("base_name", "") ?: "")
     }
-    var date by remember { mutableStateOf(today()) }
-    var start by remember { mutableStateOf("07:00") }
-    var end by remember { mutableStateOf("19:00") }
+    var date by remember { mutableStateOf("") }
+    var startTime by remember { mutableStateOf("") }
+    var endTime by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var message by remember { mutableStateOf("") }
     var showContact by remember { mutableStateOf(false) }
     var showExit by remember { mutableStateOf(false) }
-    var menuExpanded by remember { mutableStateOf(false) }
 
-    var shifts by remember {
-        mutableStateOf(loadShifts(prefs))
+    val shifts = remember {
+        mutableStateListOf<Shift>().apply {
+            val saved = preferences.getString("shifts", "[]") ?: "[]"
+            try {
+                val array = JSONArray(saved)
+                for (i in 0 until array.length()) {
+                    val item = array.getJSONObject(i)
+                    add(
+                        Shift(
+                            item.optString("date"),
+                            item.optString("start"),
+                            item.optString("end"),
+                            item.optString("description")
+                        )
+                    )
+                }
+            } catch (_: Exception) {
+                // اگر داده ذخیره‌شده قابل خواندن نباشد، فهرست خالی می‌ماند.
+            }
+        }
     }
 
     fun saveShifts() {
         val array = JSONArray()
         shifts.forEach { shift ->
-            array.put(JSONObject().apply {
-                put("date", shift.date)
-                put("start", shift.start)
-                put("end", shift.end)
-                put("description", shift.description)
-            })
+            array.put(
+                JSONObject().apply {
+                    put("date", shift.date)
+                    put("start", shift.start)
+                    put("end", shift.end)
+                    put("description", shift.description)
+                }
+            )
         }
-        prefs.edit().putString("shifts", array.toString()).apply()
+        preferences.edit()
+            .putString("shifts", array.toString())
+            .putString("base_name", baseName)
+            .apply()
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("شیفت‌یار اورژانس ۱۱۵") },
+                actions = {
+                    TextButton(onClick = { showContact = true }) {
+                        Text("درباره ما")
+                    }
+                    TextButton(onClick = { showExit = true }) {
+                        Text("خروج")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = "برنامه ثبت و مدیریت شیفت",
+                style = MaterialTheme.typography.titleLarge
+            )
+
+            OutlinedTextField(
+                value = baseName,
+                onValueChange = {
+                    baseName = it
+                    preferences.edit().putString("base_name", it).apply()
+                },
+                label = { Text("نام پایگاه") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            Text("تاریخ را به شمسی وارد کنید؛ مثال: ۱۴۰۵/۰۸/۰۲")
+
+            OutlinedTextField(
+                value = date,
+                onValueChange = { date = it },
+                label = { Text("تاریخ شیفت (شمسی)") },
+                placeholder = { Text("۱۴۰۵/۰۸/۰۲") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            OutlinedTextField(
+                value = startTime,
+                onValueChange = { startTime = it },
+                label = { Text("ساعت شروع (مثلاً 07:00)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            OutlinedTextField(
+                value = endTime,
+                onValueChange = { endTime = it },
+                label = { Text("ساعت پایان (مثلاً 19:00)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            OutlinedTextField(
+                value = description,
+                onValueChange = { description = it },
+                label = { Text("توضیحات (اختیاری)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Button(
+                onClick = {
+                    if (date.isBlank() || startTime.isBlank() || endTime.isBlank()) {
+                        Toast.makeText(
+                            context,
+                            "لطفاً تاریخ، ساعت شروع و پایان را وارد کنید",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    } else {
+                        shifts.add(
+                            Shift(
+                                date.trim(),
+                                startTime.trim(),
+                                endTime.trim(),
+                                description.trim()
+                            )
+                        )
+                        saveShifts()
+                        date = ""
+                        startTime = ""
+                        endTime = ""
+                        description = ""
+                        Toast.makeText(
+                            context,
+                            "شیفت ذخیره شد",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("ثبت شیفت")
+            }
+
+            Button(
+                onClick = { exportPdf(context, baseName, shifts) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("تهیه خروجی PDF")
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "فهرست شیفت‌ها (${shifts.size})",
+                style = MaterialTheme.typography.titleLarge
+            )
+
+            if (shifts.isEmpty()) {
+                Text("هنوز شیفتی ثبت نشده است.")
+            }
+
+            shifts.forEachIndexed { index, shift ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Text("پایگاه: ${baseName.ifBlank { "ثبت نشده" }}")
+                        Text("تاریخ: ${shift.date}")
+                        Text("ساعت: ${shift.start} تا ${shift.end}")
+                        if (shift.description.isNotBlank()) {
+                            Text("توضیحات: ${shift.description}")
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(
+                                onClick = {
+                                    shifts.removeAt(index)
+                                    saveShifts()
+                                    Toast.makeText(
+                                        context,
+                                        "شیفت حذف شد",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            ) {
+                                Text("حذف شیفت")
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "طراحی‌شده برای مدیریت شیفت‌های اورژانس پیش‌بیمارستانی",
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
     }
 
     if (showContact) {
         AlertDialog(
             onDismissRequest = { showContact = false },
-            title = { Text("اطلاعات تماس") },
+            title = { Text("درباره سازنده") },
             text = {
-                Text(
-                    "حسین شیخی\n" +
-                    "ارشد پرستاری اورژانس\n" +
-                    "سمنان\n\n" +
-                    "وب‌سایت: www.iranianems.ir\n" +
-                    "ایتا: eitaa.com/iranianems"
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("حسین شیخی")
+                    Text("کارشناس ارشد پرستاری اورژانس")
+                    Text("سمنان")
+                    Text("وب‌سایت: www.iranianems.ir")
+                    Text("ایتا: eitaa.com/iranianems")
+                }
             },
             confirmButton = {
                 TextButton(onClick = { showContact = false }) {
@@ -97,236 +321,114 @@ fun ShiftYarApp(context: Context) {
         AlertDialog(
             onDismissRequest = { showExit = false },
             title = { Text("خروج از برنامه") },
-            text = { Text("برای خروج، دکمهٔ بازگشت گوشی را بزنید.") },
+            text = { Text("آیا می‌خواهید از برنامه خارج شوید؟") },
             confirmButton = {
+                TextButton(onClick = {
+                    showExit = false
+                    (context as? ComponentActivity)?.finish()
+                }) {
+                    Text("بله، خروج")
+                }
+            },
+            dismissButton = {
                 TextButton(onClick = { showExit = false }) {
-                    Text("متوجه شدم")
+                    Text("انصراف")
                 }
             }
         )
     }
+}
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("شیفت‌یار اورژانس ۱۱۵") },
-                actions = {
-                    Box {
-                        TextButton(onClick = { menuExpanded = true }) {
-                            Text("منو ⋮")
-                        }
-                        DropdownMenu(
-                            expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("صفحه اصلی") },
-                                onClick = {
-                                    menuExpanded = false
-                                    message = "صفحه اصلی"
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("تماس با ما") },
-                                onClick = {
-                                    menuExpanded = false
-                                    showContact = true
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("خروج") },
-                                onClick = {
-                                    menuExpanded = false
-                                    showExit = true
-                                }
-                            )
-                        }
-                    }
-                }
+fun exportPdf(context: Context, baseName: String, shifts: List<Shift>) {
+    val document = PdfDocument()
+    val pageWidth = 595
+    val pageHeight = 842
+    val margin = 40f
+    val paint = Paint().apply {
+        textSize = 12f
+        isAntiAlias = true
+    }
+
+    var pageNumber = 1
+    var page = document.startPage(
+        PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
+    )
+    var canvas = page.canvas
+    var y = 50f
+
+    fun writeLine(text: String, size: Float = 12f) {
+        if (y > pageHeight - 50f) {
+            document.finishPage(page)
+            pageNumber++
+            page = document.startPage(
+                PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
             )
+            canvas = page.canvas
+            y = 50f
         }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            item {
-                Text(
-                    "مدیریت شیفت‌های پایگاه",
-                    fontSize = 21.sp
-                )
-            }
+        paint.textSize = size
+        canvas.drawText(text, margin, y, paint)
+        y += size + 12f
+    }
 
-            item {
-                OutlinedTextField(
-                    value = baseName,
-                    onValueChange = {
-                        baseName = it
-                        prefs.edit().putString("base_name", it).apply()
-                    },
-                    label = { Text("نام پایگاه اورژانس") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-            }
+    writeLine("ShiftYar 115 - Shift Schedule", 18f)
+    writeLine("Base: ${baseName.ifBlank { "Not specified" }}")
+    writeLine("Exported: ${SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date())}")
+    y += 10f
 
-            item {
-                Text("تاریخ شمسی را وارد کنید؛ نمونه: ۱۴۰۵/۰۸/۰۲")
-                OutlinedTextField(
-                    value = date,
-                    onValueChange = { date = it },
-                    label = { Text("تاریخ شیفت") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
+    if (shifts.isEmpty()) {
+        writeLine("No shifts have been registered.")
+    } else {
+        shifts.forEachIndexed { index, shift ->
+            writeLine("${index + 1}. Date: ${shift.date}")
+            writeLine("Time: ${shift.start} - ${shift.end}")
+            if (shift.description.isNotBlank()) {
+                writeLine("Notes: ${shift.description}")
             }
-
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = start,
-                        onValueChange = { start = it },
-                        label = { Text("ساعت شروع") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = end,
-                        onValueChange = { end = it },
-                        label = { Text("ساعت پایان") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
-                    )
-                }
-            }
-
-            item {
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("توضیحات (اختیاری)") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            item {
-                Button(
-                    onClick = {
-                        if (baseName.isBlank()) {
-                            message = "ابتدا نام پایگاه را وارد کنید."
-                        } else if (
-                            !date.matches(
-                                Regex("""[0-9۰-۹]{4}/[0-9۰-۹]{1,2}/[0-9۰-۹]{1,2}""")
-                            ) || !validTime(start) || !validTime(end)
-                        ) {
-                            message = "تاریخ یا ساعت را بررسی کنید."
-                        } else {
-                            shifts = shifts + Shift(
-                                date, start, end, description
-                            )
-                            saveShifts()
-                            message = "شیفت با موفقیت ثبت شد."
-                            description = ""
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("ثبت شیفت")
-                }
-            }
-
-            item {
-                Text(message)
-                HorizontalDivider()
-                Text("شیفت‌های ثبت‌شده: ${shifts.size}", fontSize = 18.sp)
-            }
-
-            items(shifts.indices.toList().reversed()) { index ->
-                val shift = shifts[index]
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text("پایگاه: $baseName")
-                        Text("تاریخ: ${shift.date}")
-                        Text("ساعت: ${shift.start} تا ${shift.end}")
-                        if (shift.description.isNotBlank()) {
-                            Text("توضیحات: ${shift.description}")
-                        }
-                        TextButton(
-                            onClick = {
-                                shifts = shifts.toMutableList().also {
-                                    it.removeAt(index)
-                                }
-                                saveShifts()
-                                message = "شیفت حذف شد."
-                            }
-                        ) {
-                            Text("حذف شیفت")
-                        }
-                    }
-                }
-            }
-
-            item {
-                OutlinedButton(
-                    onClick = {
-                        message = "اطلاعات شیفت‌ها در حافظهٔ همین گوشی ذخیره می‌شود."
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("وضعیت ذخیره‌سازی")
-                }
-            }
+            y += 8f
         }
     }
-}
 
-fun today(): String {
-    val calendar = java.util.Calendar.getInstance()
-    val year = calendar.get(java.util.Calendar.YEAR)
-    val month = calendar.get(java.util.Calendar.MONTH) + 1
-    val day = calendar.get(java.util.Calendar.DAY_OF_MONTH)
-    return "$year/${month.toString().padStart(2, '0')}/${day.toString().padStart(2, '0')}"
-}
+    document.finishPage(page)
 
-fun validTime(value: String): Boolean {
-    val normalized = value
-        .replace('۰', '0').replace('۱', '1')
-        .replace('۲', '2').replace('۳', '3')
-        .replace('۴', '4').replace('۵', '5')
-        .replace('۶', '6').replace('۷', '7')
-        .replace('۸', '8').replace('۹', '9')
-    if (!normalized.matches(Regex("""\d{2}:\d{2}"""))) return false
-    val parts = normalized.split(":")
-    return parts[0].toInt() in 0..23 && parts[1].toInt() in 0..59
-}
-
-fun loadShifts(
-    prefs: android.content.SharedPreferences
-): List<Shift> {
-    val result = mutableListOf<Shift>()
-    val json = prefs.getString("shifts", "[]") ?: "[]"
+    val fileName = "ShiftYar115_${System.currentTimeMillis()}.pdf"
     try {
-        val array = JSONArray(json)
-        for (i in 0 until array.length()) {
-            val item = array.getJSONObject(i)
-            result.add(
-                Shift(
-                    item.optString("date"),
-                    item.optString("start"),
-                    item.optString("end"),
-                    item.optString("description")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val values = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                put(MediaStore.Downloads.MIME_TYPE, "application/pdf")
+                put(
+                    MediaStore.Downloads.RELATIVE_PATH,
+                    Environment.DIRECTORY_DOWNLOADS
                 )
+            }
+            val uri = context.contentResolver.insert(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                values
             )
+            if (uri == null) {
+                throw IllegalStateException("Could not create PDF file")
+            }
+            context.contentResolver.openOutputStream(uri).use { output ->
+                if (output == null) throw IllegalStateException("Could not open PDF")
+                document.writeTo(output)
+            }
+        } else {
+            throw IllegalStateException("Android version not supported")
         }
-    } catch (_: Exception) {
-        // اگر اطلاعات ذخیره‌شده قابل خواندن نباشد، فهرست خالی می‌ماند.
-    }
-    return result
-}
 
+        Toast.makeText(
+            context,
+            "فایل PDF در پوشه Downloads ذخیره شد",
+            Toast.LENGTH_LONG
+        ).show()
+    } catch (e: Exception) {
+        Toast.makeText(
+            context,
+            "ساخت PDF ناموفق بود: ${e.localizedMessage ?: "خطای ناشناخته"}",
+            Toast.LENGTH_LONG
+        ).show()
+    } finally {
+        document.close()
+    }
+}
