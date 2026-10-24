@@ -614,7 +614,7 @@ fun ShiftYarApp(context: Context) {
                             onClick = {
                                 val yy = year.toIntOrNull()
                                 val mm = month.toIntOrNull()
-                                if (personnel.size < 2 || yy == null || mm !in 1..12) {
+                                if (personnel.size < 2 || yy == null || mm == null || mm !in 1..12) {
                                     Toast.makeText(context, "سال، ماه معتبر و حداقل دو پرسنل لازم است", Toast.LENGTH_LONG).show()
                                 } else {
                                     val maxDay = if (mm <= 6) 31 else if (mm <= 11) 30 else 30
@@ -622,7 +622,13 @@ fun ShiftYarApp(context: Context) {
                                         val parts = line.split(":", limit = 2)
                                         if (parts.size != 2) null else {
                                             val name = parts[0].trim()
-                                            val days = parts[1].split(",", "،", " ").mapNotNull { it.trim().toIntOrNull() }.filter { it in 1..maxDay }.toSet()
+                                            val days = parts[1].split(",", "،", " ").mapNotNull { token ->
+                                                token.trim()
+                                                    .replace('۰', '0').replace('۱', '1').replace('۲', '2')
+                                                    .replace('۳', '3').replace('۴', '4').replace('۵', '5')
+                                                    .replace('۶', '6').replace('۷', '7').replace('۸', '8')
+                                                    .replace('۹', '9').toIntOrNull()
+                                            }.filter { it in 1..maxDay }.toSet()
                                             if (name.isBlank()) null else name to days
                                         }
                                     }.toMap()
@@ -639,10 +645,10 @@ fun ShiftYarApp(context: Context) {
                                         for (day in 1..maxDay) {
                                             val dayText = day.toString().padStart(2, '0')
                                             val dateText = "$yy/${mm.toString().padStart(2, '0')}/$dayText"
-                                            val requiredToday = required.filterValues { day in it }.keys
+                                            val requiredToday = required.filterValues { day in it }.keys.mapNotNull { ruleName -> personnel.firstOrNull { it.equals(ruleName, ignoreCase = true) } }
                                             for (type in types) {
                                                 val blocked = unavailable.filterValues { day in it }.keys
-                                                val candidates = personnel.filter { it !in blocked }.sortedWith(compareBy<String> { counts[it] ?: 0 }.thenBy { it })
+                                                val candidates = personnel.filter { person -> blocked.none { it.equals(person, ignoreCase = true) } }.sortedWith(compareBy<String> { counts[it] ?: 0 }.thenBy { it })
                                                 val chosen = mutableListOf<String>()
                                                 // If a required person has not yet been assigned today, prioritize them.
                                                 val mustAssign = requiredToday.filter { it !in chosen && it in candidates }
