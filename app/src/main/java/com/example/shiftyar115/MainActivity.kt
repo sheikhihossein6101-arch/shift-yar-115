@@ -12,6 +12,7 @@ import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,14 +21,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -36,13 +36,18 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -59,11 +64,71 @@ data class Shift(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         setContent {
             MaterialTheme {
-                ShiftYarApp(this)
+                var showSplash by remember { mutableStateOf(true) }
+
+                LaunchedEffect(Unit) {
+                    delay(3000)
+                    showSplash = false
+                }
+
+                if (showSplash) {
+                    SplashScreen()
+                } else {
+                    ShiftYarApp(this@MainActivity)
+                }
             }
         }
+    }
+}
+
+@Composable
+fun SplashScreen() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0D47A1))
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "✚",
+            color = Color.White,
+            style = MaterialTheme.typography.displayLarge
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "شیفت‌یار اورژانس ۱۱۵",
+            color = Color.White,
+            style = MaterialTheme.typography.headlineMedium,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = "سامانه مدیریت شیفت‌های اورژانس",
+            color = Color.White,
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(36.dp))
+
+        CircularProgressIndicator(color = Color.White)
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "در حال ورود به برنامه...",
+            color = Color.White,
+            style = MaterialTheme.typography.bodyMedium
+        )
     }
 }
 
@@ -101,7 +166,7 @@ fun ShiftYarApp(context: Context) {
                     )
                 }
             } catch (_: Exception) {
-                // اگر داده ذخیره‌شده قابل خواندن نباشد، فهرست خالی می‌ماند.
+                // داده ذخیره‌شده قابل خواندن نبود.
             }
         }
     }
@@ -118,6 +183,7 @@ fun ShiftYarApp(context: Context) {
                 }
             )
         }
+
         preferences.edit()
             .putString("shifts", array.toString())
             .putString("base_name", baseName)
@@ -156,7 +222,9 @@ fun ShiftYarApp(context: Context) {
                 value = baseName,
                 onValueChange = {
                     baseName = it
-                    preferences.edit().putString("base_name", it).apply()
+                    preferences.edit()
+                        .putString("base_name", it)
+                        .apply()
                 },
                 label = { Text("نام پایگاه") },
                 modifier = Modifier.fillMaxWidth(),
@@ -199,7 +267,11 @@ fun ShiftYarApp(context: Context) {
 
             Button(
                 onClick = {
-                    if (date.isBlank() || startTime.isBlank() || endTime.isBlank()) {
+                    if (
+                        date.isBlank() ||
+                        startTime.isBlank() ||
+                        endTime.isBlank()
+                    ) {
                         Toast.makeText(
                             context,
                             "لطفاً تاریخ، ساعت شروع و پایان را وارد کنید",
@@ -214,11 +286,13 @@ fun ShiftYarApp(context: Context) {
                                 description.trim()
                             )
                         )
+
                         saveShifts()
                         date = ""
                         startTime = ""
                         endTime = ""
                         description = ""
+
                         Toast.makeText(
                             context,
                             "شیفت ذخیره شد",
@@ -232,7 +306,9 @@ fun ShiftYarApp(context: Context) {
             }
 
             Button(
-                onClick = { exportPdf(context, baseName, shifts) },
+                onClick = {
+                    exportPdf(context, baseName, shifts)
+                },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("تهیه خروجی PDF")
@@ -253,19 +329,24 @@ fun ShiftYarApp(context: Context) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        containerColor =
+                            MaterialTheme.colorScheme.surfaceVariant
                     )
                 ) {
                     Column(
                         modifier = Modifier.padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        Text("پایگاه: ${baseName.ifBlank { "ثبت نشده" }}")
+                        Text(
+                            "پایگاه: ${baseName.ifBlank { "ثبت نشده" }}"
+                        )
                         Text("تاریخ: ${shift.date}")
                         Text("ساعت: ${shift.start} تا ${shift.end}")
+
                         if (shift.description.isNotBlank()) {
                             Text("توضیحات: ${shift.description}")
                         }
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.End
@@ -274,6 +355,7 @@ fun ShiftYarApp(context: Context) {
                                 onClick = {
                                     shifts.removeAt(index)
                                     saveShifts()
+
                                     Toast.makeText(
                                         context,
                                         "شیفت حذف شد",
@@ -289,6 +371,7 @@ fun ShiftYarApp(context: Context) {
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+
             Text(
                 text = "طراحی‌شده برای مدیریت شیفت‌های اورژانس پیش‌بیمارستانی",
                 style = MaterialTheme.typography.bodySmall
@@ -301,7 +384,9 @@ fun ShiftYarApp(context: Context) {
             onDismissRequest = { showContact = false },
             title = { Text("درباره سازنده") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text("حسین شیخی")
                     Text("کارشناس ارشد پرستاری اورژانس")
                     Text("سمنان")
@@ -323,10 +408,12 @@ fun ShiftYarApp(context: Context) {
             title = { Text("خروج از برنامه") },
             text = { Text("آیا می‌خواهید از برنامه خارج شوید؟") },
             confirmButton = {
-                TextButton(onClick = {
-                    showExit = false
-                    (context as? ComponentActivity)?.finish()
-                }) {
+                TextButton(
+                    onClick = {
+                        showExit = false
+                        (context as? ComponentActivity)?.finish()
+                    }
+                ) {
                     Text("بله، خروج")
                 }
             },
@@ -339,11 +426,16 @@ fun ShiftYarApp(context: Context) {
     }
 }
 
-fun exportPdf(context: Context, baseName: String, shifts: List<Shift>) {
+fun exportPdf(
+    context: Context,
+    baseName: String,
+    shifts: List<Shift>
+) {
     val document = PdfDocument()
     val pageWidth = 595
     val pageHeight = 842
     val margin = 40f
+
     val paint = Paint().apply {
         textSize = 12f
         isAntiAlias = true
@@ -351,8 +443,13 @@ fun exportPdf(context: Context, baseName: String, shifts: List<Shift>) {
 
     var pageNumber = 1
     var page = document.startPage(
-        PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
+        PdfDocument.PageInfo.Builder(
+            pageWidth,
+            pageHeight,
+            pageNumber
+        ).create()
     )
+
     var canvas = page.canvas
     var y = 50f
 
@@ -360,12 +457,19 @@ fun exportPdf(context: Context, baseName: String, shifts: List<Shift>) {
         if (y > pageHeight - 50f) {
             document.finishPage(page)
             pageNumber++
+
             page = document.startPage(
-                PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
+                PdfDocument.PageInfo.Builder(
+                    pageWidth,
+                    pageHeight,
+                    pageNumber
+                ).create()
             )
+
             canvas = page.canvas
             y = 50f
         }
+
         paint.textSize = size
         canvas.drawText(text, margin, y, paint)
         y += size + 12f
@@ -373,7 +477,15 @@ fun exportPdf(context: Context, baseName: String, shifts: List<Shift>) {
 
     writeLine("ShiftYar 115 - Shift Schedule", 18f)
     writeLine("Base: ${baseName.ifBlank { "Not specified" }}")
-    writeLine("Exported: ${SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date())}")
+    writeLine(
+        "Exported: ${
+            SimpleDateFormat(
+                "yyyy-MM-dd HH:mm",
+                Locale.US
+            ).format(Date())
+        }"
+    )
+
     y += 10f
 
     if (shifts.isEmpty()) {
@@ -382,9 +494,11 @@ fun exportPdf(context: Context, baseName: String, shifts: List<Shift>) {
         shifts.forEachIndexed { index, shift ->
             writeLine("${index + 1}. Date: ${shift.date}")
             writeLine("Time: ${shift.start} - ${shift.end}")
+
             if (shift.description.isNotBlank()) {
                 writeLine("Notes: ${shift.description}")
             }
+
             y += 8f
         }
     }
@@ -392,6 +506,7 @@ fun exportPdf(context: Context, baseName: String, shifts: List<Shift>) {
     document.finishPage(page)
 
     val fileName = "ShiftYar115_${System.currentTimeMillis()}.pdf"
+
     try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {
@@ -402,15 +517,16 @@ fun exportPdf(context: Context, baseName: String, shifts: List<Shift>) {
                     Environment.DIRECTORY_DOWNLOADS
                 )
             }
+
             val uri = context.contentResolver.insert(
                 MediaStore.Downloads.EXTERNAL_CONTENT_URI,
                 values
-            )
-            if (uri == null) {
-                throw IllegalStateException("Could not create PDF file")
-            }
+            ) ?: throw IllegalStateException("Could not create PDF file")
+
             context.contentResolver.openOutputStream(uri).use { output ->
-                if (output == null) throw IllegalStateException("Could not open PDF")
+                if (output == null) {
+                    throw IllegalStateException("Could not open PDF")
+                }
                 document.writeTo(output)
             }
         } else {
@@ -425,7 +541,9 @@ fun exportPdf(context: Context, baseName: String, shifts: List<Shift>) {
     } catch (e: Exception) {
         Toast.makeText(
             context,
-            "ساخت PDF ناموفق بود: ${e.localizedMessage ?: "خطای ناشناخته"}",
+            "ساخت PDF ناموفق بود: ${
+                e.localizedMessage ?: "خطای ناشناخته"
+            }",
             Toast.LENGTH_LONG
         ).show()
     } finally {
