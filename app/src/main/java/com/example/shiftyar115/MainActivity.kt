@@ -478,7 +478,9 @@ fun ShiftYarApp(context: Context) {
                         )
 
                         val previewDate = "${year.trim()}/${month.toIntOrNull()?.toString()?.padStart(2, '0') ?: "01"}/${date.toIntOrNull()?.toString()?.padStart(2, '0') ?: "01"}"
-                        if (date.toIntOrNull() in 1..31 && year.toIntOrNull() != null && month.toIntOrNull() in 1..12) {
+                        if ((date.toIntOrNull() ?: 0) in 1..31 &&
+                            year.toIntOrNull() != null &&
+                            (month.toIntOrNull() ?: 0) in 1..12) {
                             Text(
                                 "روز هفته: ${weekdayForJalali(previewDate)}",
                                 color = Navy,
@@ -512,8 +514,9 @@ fun ShiftYarApp(context: Context) {
                                 val dayNumber = date.toIntOrNull()
                                 val monthNumber = month.toIntOrNull()
                                 val yearNumber = year.toIntOrNull()
-                                val validMonth = monthNumber in 1..12
-                                val maxDay = if (monthNumber in 1..6) 31 else if (monthNumber in 7..11) 30 else 30
+                                val validMonth = (monthNumber ?: 0) in 1..12
+                                val safeMonth = monthNumber ?: 0
+                                val maxDay = if (safeMonth in 1..6) 31 else if (safeMonth in 7..11) 30 else 30
                                 val validDate = dayNumber != null && dayNumber in 1..maxDay
                                 val cleanDate = "${yearNumber ?: 0}/${monthNumber?.toString()?.padStart(2, '0') ?: "00"}/${dayNumber?.toString()?.padStart(2, '0') ?: "00"}"
 
@@ -614,7 +617,7 @@ fun ShiftYarApp(context: Context) {
                             onClick = {
                                 val yy = year.toIntOrNull()
                                 val mm = month.toIntOrNull()
-                                if (personnel.size < 2 || yy == null || mm !in 1..12) {
+                                if (personnel.size < 2 || yy == null || mm == null || mm !in 1..12) {
                                     Toast.makeText(context, "سال، ماه معتبر و حداقل دو پرسنل لازم است", Toast.LENGTH_LONG).show()
                                 } else {
                                     val maxDay = if (mm <= 6) 31 else if (mm <= 11) 30 else 30
