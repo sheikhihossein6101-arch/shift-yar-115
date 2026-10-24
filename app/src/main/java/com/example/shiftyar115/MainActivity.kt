@@ -1,16 +1,17 @@
-
 package com.example.shiftyar115
 
 import android.content.Context
 import android.os.Bundle
 import android.widget.Toast
+import android.print.PrintAttributes
+import android.print.PrintManager
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -21,18 +22,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
-import java.time.temporal.ChronoUnit
 
 private val Navy = Color(0xFF123A67)
 private val Blue = Color(0xFF1769AA)
 private val PaleBlue = Color(0xFFEAF3FC)
+private val Teal = Color(0xFF12A89D)
+private val PageBg = Color(0xFFF3F7FB)
 
 data class ShiftEntry(
     val date: String,
@@ -49,7 +50,7 @@ class MainActivity : ComponentActivity() {
                 colorScheme = lightColorScheme(
                     primary = Navy,
                     secondary = Blue,
-                    background = Color(0xFFF5F8FC),
+                    background = PageBg,
                     surface = Color.White
                 )
             ) {
@@ -121,7 +122,6 @@ fun ShiftYarApp(context: Context) {
         mutableStateOf(prefs.getString("base_name", "") ?: "")
     }
     var selectedPage by remember { mutableStateOf("خانه") }
-    var drawerOpen by remember { mutableStateOf(false) }
     var showExit by remember { mutableStateOf(false) }
     var showContact by remember { mutableStateOf(false) }
 
@@ -482,12 +482,29 @@ fun ShiftYarApp(context: Context) {
 
                         OutlinedTextField(
                             value = date,
-                            onValueChange = { date = it },
-                            label = { Text("تاریخ شمسی (مثلاً ۱۴۰۵/۰۸/۰۲)") },
-                            placeholder = { Text("۱۴۰۵/۰۸/۰۲") },
+                            onValueChange = { date = it.filter(Char::isDigit).take(2) },
+                            label = { Text("شماره روز ماه") },
+                            placeholder = { Text("مثلاً ۱۵") },
+                            supportingText = {
+                                Text("سال و ماه را از بالا انتخاب کنید؛ روز هفته خودکار نمایش داده می‌شود.")
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true
                         )
+
+                        val previewDate =
+                            "${year.trim()}/${month.toIntOrNull()?.toString()?.padStart(2, '0') ?: "01"}/${date.toIntOrNull()?.toString()?.padStart(2, '0') ?: "01"}"
+
+                        if (date.toIntOrNull() in 1..31 &&
+                            year.toIntOrNull() != null &&
+                            month.toIntOrNull() in 1..12
+                        ) {
+                            Text(
+                                "روز هفته: ${weekdayForJalali(previewDate)}",
+                                color = Navy,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
 
                         if (shiftMode == "۱۲ ساعته") {
                             Row(
@@ -526,15 +543,24 @@ fun ShiftYarApp(context: Context) {
 
                         Button(
                             onClick = {
-                                val cleanDate = date.trim()
-                                val validMonth = month.toIntOrNull() in 1..12
-                                val parts = cleanDate.split("/")
-                                val validDate = parts.size == 3 &&
-                                    parts[0].toIntOrNull() != null &&
-                                    parts[1].toIntOrNull() in 1..12 &&
-                                    parts[2].toIntOrNull() in 1..31
+                                val dayNumber = date.toIntOrNull()
+                                val monthNumber = month.toIntOrNull()
+                                val yearNumber = year.toIntOrNull()
+                                val validMonth = monthNumber in 1..12
+                                val maxDay = if (monthNumber in 1..6) {
+                                    31
+                                } else if (monthNumber in 7..11) {
+                                    30
+                                } else {
+                                    30
+                                }
+                                val validDate =
+                                    dayNumber != null && dayNumber in 1..maxDay
 
-                                if (!validMonth || year.toIntOrNull() == null) {
+                                val cleanDate =
+                                    "${yearNumber ?: 0}/${monthNumber?.toString()?.padStart(2, '0') ?: "00"}/${dayNumber?.toString()?.padStart(2, '0') ?: "00"}"
+
+                                if (!validMonth || yearNumber == null) {
                                     Toast.makeText(
                                         context,
                                         "ماه و سال را درست وارد کنید",
@@ -543,16 +569,7 @@ fun ShiftYarApp(context: Context) {
                                 } else if (!validDate) {
                                     Toast.makeText(
                                         context,
-                                        "تاریخ را به صورت سال/ماه/روز وارد کنید",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                } else if (
-                                    parts[0].toIntOrNull() != year.toIntOrNull() ||
-                                    parts[1].toIntOrNull() != month.toIntOrNull()
-                                ) {
-                                    Toast.makeText(
-                                        context,
-                                        "تاریخ باید با ماه و سال انتخاب‌شده مطابقت داشته باشد",
+                                        "شماره روز معتبر از ۱ تا $maxDay وارد کنید",
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 } else if (
@@ -625,11 +642,11 @@ fun ShiftYarApp(context: Context) {
 
                         OutlinedButton(
                             onClick = {
-                                exportMonthlyCsvLikeText(context, shifts, year, month)
+                                exportMonthlyPdf(context, shifts, year, month, baseName)
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("گزارش متنی ماه")
+                            Text("دریافت خروجی PDF ماهانه")
                         }
 
                         HorizontalDivider()
@@ -679,7 +696,7 @@ fun ShiftYarApp(context: Context) {
                                         TextButton(
                                             onClick = {
                                                 editIndex = actualIndex
-                                                date = entry.date
+                                                date = entry.date.substringAfterLast("/")
                                                 firstPerson = entry.first
                                                 secondPerson = entry.second
                                                 shiftMode =
@@ -902,34 +919,113 @@ fun jalaliToGregorian(jy: Int, jm: Int, jd: Int): IntArray {
     return intArrayOf(gy, gm, gd.toInt())
 }
 
-fun exportMonthlyCsvLikeText(
+fun exportMonthlyPdf(
     context: Context,
     shifts: List<ShiftEntry>,
     year: String,
-    month: String
+    month: String,
+    baseName: String
 ) {
     val filtered = shifts.filter {
         val p = it.date.split("/")
-        p.size == 3 && p[0] == year &&
+        p.size == 3 && p[0].toIntOrNull() == year.toIntOrNull() &&
             p[1].toIntOrNull() == month.toIntOrNull()
-    }.sortedBy { it.date }
+    }.sortedBy {
+        val p = it.date.split("/")
+        p.getOrNull(2)?.toIntOrNull() ?: 0
+    }
 
-    val report = buildString {
-        appendLine("گزارش شیفت‌یار اورژانس ۱۱۵")
-        appendLine("ماه: $year/$month")
-        appendLine("--------------------------------")
-        filtered.forEach {
-            appendLine("تاریخ: ${it.date} (${weekdayForJalali(it.date)})")
-            appendLine("نوع شیفت: ${it.type}")
-            appendLine("نفر اول: ${it.first}")
-            appendLine("نفر دوم: ${it.second}")
-            appendLine("--------------------------------")
+    if (filtered.isEmpty()) {
+        Toast.makeText(
+            context,
+            "برای این ماه شیفتی ثبت نشده است",
+            Toast.LENGTH_LONG
+        ).show()
+        return
+    }
+
+    fun esc(value: String) = value.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+
+    val rows = filtered.joinToString("") { entry ->
+        """<tr>
+            <td>${esc(entry.date)}<br/><span>${esc(weekdayForJalali(entry.date))}</span></td>
+            <td>${esc(entry.type)}</td>
+            <td>${esc(entry.first)}</td>
+            <td>${esc(entry.second)}</td>
+        </tr>"""
+    }
+
+    val html = """
+        <!doctype html>
+        <html lang="fa" dir="rtl">
+        <head><meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+        @page { size: A4 landscape; margin: 14mm; }
+        body { font-family: sans-serif; direction: rtl; color: #18324d; }
+        h1 { text-align:center; color:#123A67; font-size:22px; }
+        .sub { text-align:center; margin-bottom:20px; }
+        table { width:100%; border-collapse:collapse; }
+        th { background:#123A67; color:white; padding:10px; }
+        td { border:1px solid #b8c8d8; padding:9px; text-align:center; }
+        tr:nth-child(even) { background:#edf5fb; }
+        span { color:#087f78; font-weight:bold; }
+        </style></head>
+        <body>
+        <h1>گزارش ماهانه شیفت‌یار اورژانس ۱۱۵</h1>
+        <div class="sub">پایگاه: ${esc(baseName.ifBlank { "ثبت نشده" })} | ماه: ${esc(year)}/${esc(month)}</div>
+        <table>
+          <thead>
+            <tr>
+              <th>تاریخ و روز هفته</th>
+              <th>نوع شیفت</th>
+              <th>نفر اول</th>
+              <th>نفر دوم</th>
+            </tr>
+          </thead>
+          <tbody>$rows</tbody>
+        </table>
+        </body></html>
+    """.trimIndent()
+
+    val printManager =
+        context.getSystemService(Context.PRINT_SERVICE) as? PrintManager
+
+    if (printManager == null) {
+        Toast.makeText(
+            context,
+            "امکان ساخت PDF در این دستگاه در دسترس نیست",
+            Toast.LENGTH_LONG
+        ).show()
+        return
+    }
+
+    val webView = WebView(context)
+    webView.settings.defaultTextEncodingName = "UTF-8"
+    webView.webViewClient = object : WebViewClient() {
+        override fun onPageFinished(view: WebView, url: String?) {
+            val adapter = view.createPrintDocumentAdapter(
+                "ShiftYar-${year}-${month}"
+            )
+            printManager.print(
+                "گزارش شیفت‌یار ${year}/${month}",
+                adapter,
+                PrintAttributes.Builder()
+                    .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                    .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
+                    .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+                    .build()
+            )
         }
     }
 
-    android.app.AlertDialog.Builder(context)
-        .setTitle("گزارش ماهانه")
-        .setMessage(report)
-        .setPositiveButton("بستن", null)
-        .show()
+    webView.loadDataWithBaseURL(
+        null,
+        html,
+        "text/HTML",
+        "UTF-8",
+        null
+    )
 }
