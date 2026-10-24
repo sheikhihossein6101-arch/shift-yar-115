@@ -1150,12 +1150,21 @@ fun exportMonthlyPdf(
     fun esc(value: String) = value.replace("&", "&amp;")
         .replace("<", "&lt;").replace(">", "&gt;")
 
-    val rows = filtered.joinToString("") { entry ->
+    val grouped = filtered.groupBy { it.date }.toSortedMap(compareBy<String> { dateText ->
+        dateText.split("/").getOrNull(2)?.toIntOrNull() ?: 0
+    })
+    val rows = grouped.entries.joinToString("") { (dateText, entries) ->
+        val morning = entries.firstOrNull { it.type == "صبح" || it.type.lowercase().contains("morning") }
+        val night = entries.firstOrNull { it.type == "شب" || it.type.lowercase().contains("night") }
+        val fullDay = entries.firstOrNull { it.type == "۲۴ ساعته" || it.type == "24h" }
+        fun cell(value: String) = if (value.isBlank()) "—" else esc(value)
+        val dayName = esc(weekdayForJalali(dateText))
         """<tr>
-            <td>${esc(entry.date)}<br/><span>${esc(weekdayForJalali(entry.date))}</span></td>
-            <td>${esc(if (entry.type == "۲۴ ساعته" || entry.type == "24h") "۲۴ ساعته" else if (entry.type == "صبح" || entry.type.lowercase().contains("morning")) "صبح" else if (entry.type == "شب" || entry.type.lowercase().contains("night")) "شب" else entry.type)}</td>
-            <td>${esc(entry.first)}</td>
-            <td>${esc(entry.second)}</td>
+            <td class="date">${esc(dateText)}<br/><span>$dayName</span></td>
+            <td>${cell(morning?.first ?: fullDay?.first.orEmpty())}</td>
+            <td>${cell(morning?.second ?: fullDay?.second.orEmpty())}</td>
+            <td>${cell(night?.first.orEmpty())}</td>
+            <td>${cell(night?.second.orEmpty())}</td>
         </tr>"""
     }
     val html = """
@@ -1165,19 +1174,21 @@ fun exportMonthlyPdf(
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
         @page { size: A4 landscape; margin: 5mm; }
-        body { font-family: sans-serif; direction: rtl; color: #18324d; font-size: 8px; }
-        h1 { text-align:center; color:#123A67; font-size:14px; margin: 2px 0 4px; }
-        .sub { text-align:center; margin-bottom:6px; font-size:9px; }
-        table { width:100%; border-collapse:collapse; }
-        th { background:#123A67; color:white; padding:3px; font-size:8px; }
-        td { border:1px solid #b8c8d8; padding:2px; text-align:center; font-size:7px; line-height:1.05; }
-        tr:nth-child(even) { background:#edf5fb; } tr { page-break-inside: avoid; } table { table-layout:fixed; }
+        * { box-sizing: border-box; }
+        body { font-family: sans-serif; direction: rtl; color: #18324d; font-size: 10px; margin:0; }
+        h1 { text-align:center; color:#123A67; font-size:17px; margin: 2px 0 4px; font-weight:700; }
+        .sub { text-align:center; margin-bottom:7px; font-size:10px; }
+        table { width:100%; border-collapse:collapse; table-layout:fixed; }
+        th { background:#123A67; color:white; padding:5px 3px; font-size:10px; }
+        td { border:1px solid #9eb3c8; padding:4px 2px; text-align:center; font-size:10px; line-height:1.15; overflow-wrap:anywhere; }
+        tr:nth-child(even) { background:#edf5fb; } tr { page-break-inside: avoid; }
+        td.date { width:14%; font-weight:bold; }
         span { color:#087f78; font-weight:bold; }
         </style></head>
         <body>
         <h1>${esc(baseName.ifBlank { "نام پایگاه بهره‌وری اورژانس ۱۱۵ ثبت نشده" })}</h1>
         <div class="sub">گزارش ماهانه شیفت‌یار اورژانس ۱۱۵ | ماه: ${esc(year)}/${esc(month)}</div>
-        <table><thead><tr><th>تاریخ و روز هفته</th><th>نوع شیفت</th><th>نفر اول</th><th>نفر دوم</th></tr></thead>
+        <table><thead><tr><th>تاریخ و روز هفته</th><th>صبح - نفر اول</th><th>صبح - نفر دوم</th><th>شب - نفر اول</th><th>شب - نفر دوم</th></tr></thead>
         <tbody>$rows</tbody></table>
         </body></html>
     """.trimIndent()
