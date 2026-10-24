@@ -136,6 +136,10 @@ fun ShiftYarApp(context: Context) {
     var shiftMode by remember { mutableStateOf("۲۴ ساعته") }
     var unavailableRules by remember { mutableStateOf(prefs.getString("unavailable_rules", "") ?: "") }
     var requiredRules by remember { mutableStateOf(prefs.getString("required_rules", "") ?: "") }
+    var rulePerson by remember { mutableStateOf("") }
+    var ruleDays by remember { mutableStateOf("") }
+    var ruleUnavailable by remember { mutableStateOf(true) }
+    var personMenuExpanded by remember { mutableStateOf(false) }
     var shiftType by remember { mutableStateOf("۲۴ ساعته") }
     var firstPerson by remember { mutableStateOf("") }
     var secondPerson by remember { mutableStateOf("") }
@@ -598,7 +602,39 @@ fun ShiftYarApp(context: Context) {
 
                         HorizontalDivider()
                         Text("برنامه‌ریزی هوشمند", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy)
-                        Text("قالب هر خط: نام پرسنل:شماره روزها؛ روزها را با ویرگول جدا کنید. مثال: علی رضایی:۳,۷,۱۲", style = MaterialTheme.typography.bodySmall)
+                        Text("نام فرد را از فهرست انتخاب کنید و روزها را وارد کنید؛ سپس دکمه افزودن را بزنید.", style = MaterialTheme.typography.bodySmall)
+                        Box(Modifier.fillMaxWidth()) {
+                            OutlinedButton(onClick = { personMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                                Text(if (rulePerson.isBlank()) "انتخاب نام پرسنل" else rulePerson)
+                            }
+                            DropdownMenu(expanded = personMenuExpanded, onDismissRequest = { personMenuExpanded = false }) {
+                                personnel.forEach { name -> DropdownMenuItem(text = { Text(name) }, onClick = { rulePerson = name; personMenuExpanded = false }) }
+                            }
+                        }
+                        OutlinedTextField(value = ruleDays, onValueChange = { ruleDays = it }, label = { Text("شماره روزها (مثلاً ۳،۷،۱۲)") }, modifier = Modifier.fillMaxWidth())
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = ruleUnavailable, onClick = { ruleUnavailable = true })
+                            Text("عدم حضور")
+                            Spacer(Modifier.width(12.dp))
+                            RadioButton(selected = !ruleUnavailable, onClick = { ruleUnavailable = false })
+                            Text("حضور اجباری")
+                        }
+                        Button(onClick = {
+                            val days = ruleDays.split(",", "،", " ").mapNotNull { it.trim().toIntOrNull() }.filter { it in 1..31 }.distinct()
+                            if (rulePerson.isBlank() || days.isEmpty()) {
+                                Toast.makeText(context, "نام پرسنل و شماره روز معتبر را انتخاب کنید", Toast.LENGTH_SHORT).show()
+                            } else {
+                                val line = "$rulePerson:${days.joinToString(",")}" 
+                                if (ruleUnavailable) {
+                                    unavailableRules = (unavailableRules.lines().filter { it.substringBefore(":").trim() != rulePerson } + line).filter { it.isNotBlank() }.joinToString("\n")
+                                    prefs.edit().putString("unavailable_rules", unavailableRules).apply()
+                                } else {
+                                    requiredRules = (requiredRules.lines().filter { it.substringBefore(":").trim() != rulePerson } + line).filter { it.isNotBlank() }.joinToString("\n")
+                                    prefs.edit().putString("required_rules", requiredRules).apply()
+                                }
+                                ruleDays = ""
+                            }
+                        }, modifier = Modifier.fillMaxWidth()) { Text("افزودن روزها برای فرد انتخاب‌شده") }
                         OutlinedTextField(
                             value = unavailableRules,
                             onValueChange = { unavailableRules = it; prefs.edit().putString("unavailable_rules", it).apply() },
@@ -1128,19 +1164,19 @@ fun exportMonthlyPdf(
         <head><meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
-        @page { size: A4 landscape; margin: 14mm; }
-        body { font-family: sans-serif; direction: rtl; color: #18324d; }
-        h1 { text-align:center; color:#123A67; font-size:22px; }
-        .sub { text-align:center; margin-bottom:20px; }
+        @page { size: A4 landscape; margin: 5mm; }
+        body { font-family: sans-serif; direction: rtl; color: #18324d; font-size: 8px; }
+        h1 { text-align:center; color:#123A67; font-size:14px; margin: 2px 0 4px; }
+        .sub { text-align:center; margin-bottom:6px; font-size:9px; }
         table { width:100%; border-collapse:collapse; }
-        th { background:#123A67; color:white; padding:10px; }
-        td { border:1px solid #b8c8d8; padding:9px; text-align:center; }
-        tr:nth-child(even) { background:#edf5fb; }
+        th { background:#123A67; color:white; padding:3px; font-size:8px; }
+        td { border:1px solid #b8c8d8; padding:2px; text-align:center; font-size:7px; line-height:1.05; }
+        tr:nth-child(even) { background:#edf5fb; } tr { page-break-inside: avoid; } table { table-layout:fixed; }
         span { color:#087f78; font-weight:bold; }
         </style></head>
         <body>
-        <h1>گزارش ماهانه شیفت‌یار اورژانس ۱۱۵</h1>
-        <div class="sub">پایگاه: ${esc(baseName.ifBlank { "ثبت نشده" })} | ماه: ${esc(year)}/${esc(month)}</div>
+        <h1>${esc(baseName.ifBlank { "نام پایگاه بهره‌وری اورژانس ۱۱۵ ثبت نشده" })}</h1>
+        <div class="sub">گزارش ماهانه شیفت‌یار اورژانس ۱۱۵ | ماه: ${esc(year)}/${esc(month)}</div>
         <table><thead><tr><th>تاریخ و روز هفته</th><th>نوع شیفت</th><th>نفر اول</th><th>نفر دوم</th></tr></thead>
         <tbody>$rows</tbody></table>
         </body></html>
@@ -1160,7 +1196,7 @@ fun exportMonthlyPdf(
                 "گزارش شیفت‌یار ${year}/${month}",
                 adapter,
                 PrintAttributes.Builder()
-                    .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                    .setMediaSize(PrintAttributes.MediaSize.ISO_A4.asLandscape())
                     .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
                     .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
                     .build()
