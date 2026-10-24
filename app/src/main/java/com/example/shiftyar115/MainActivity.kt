@@ -266,6 +266,39 @@ fun ShiftYarApp(context: Context) {
             ) {
                 when (selectedPage) {
                     "خانه" -> {
+                        // داشبورد مدیریتی جدید
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(containerColor = Navy),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalAlignment = Alignment.End
+                            ) {
+                                Text("داشبورد شیفت‌یار", color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                                Text("مدیریت هوشمند شیفت‌های اورژانس ۱۱۵", color = Color(0xFFD8E8FA), style = MaterialTheme.typography.bodyMedium)
+                                Spacer(Modifier.height(4.dp))
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Text("امروز: ${LocalDate.now().dayOfMonth}", color = Color.White, fontWeight = FontWeight.Medium)
+                                    Text("${LocalDate.now().year}/${LocalDate.now().monthValue}", color = Color.White)
+                                }
+                            }
+                        }
+
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            DashboardMetric("پرسنل", personnel.size.toString(), "👥", Modifier.weight(1f), Blue)
+                            DashboardMetric("برنامه‌ها", shifts.size.toString(), "📋", Modifier.weight(1f), Teal)
+                        }
+
+                        Text("دسترسی سریع", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Navy)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            DashboardAction("برنامه‌ریزی شیفت", "ساخت و ویرایش", Modifier.weight(1f)) { selectedPage = "مدیریت شیفت‌ها" }
+                            DashboardAction("مدیریت پرسنل", "افزودن و حذف", Modifier.weight(1f)) { selectedPage = "مدیریت پرسنل" }
+                        }
+
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(20.dp),
@@ -307,40 +340,6 @@ fun ShiftYarApp(context: Context) {
                                     )
                                 )
                             }
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            SummaryCard(
-                                "تعداد پرسنل",
-                                personnel.size.toString(),
-                                Modifier.weight(1f)
-                            )
-                            SummaryCard(
-                                "تعداد ردیف شیفت",
-                                shifts.size.toString(),
-                                Modifier.weight(1f)
-                            )
-                        }
-
-                        Button(
-                            onClick = {
-                                selectedPage = "مدیریت شیفت‌ها"
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("ورود به مدیریت شیفت‌ها")
-                        }
-
-                        OutlinedButton(
-                            onClick = {
-                                selectedPage = "مدیریت پرسنل"
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("مدیریت پرسنل")
                         }
 
                         Text(
@@ -741,21 +740,41 @@ fun ShiftYarApp(context: Context) {
                                 p[1].toIntOrNull() == month.toIntOrNull()
                         }.sortedBy { it.date }
 
-                        Text(
-                            "تقویم ماهانه شیفت‌ها",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = Navy
-                        )
-
-                        MonthlyShiftCalendar(
-                            year = year.toIntOrNull() ?: 1405,
-                            month = month.toIntOrNull() ?: 1,
-                            shifts = filtered,
-                            onSelectDay = { selectedDay ->
-                                date = selectedDay.toString()
+                        var calendarExpanded by remember { mutableStateOf(false) }
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = PaleBlue),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Column(Modifier.fillMaxWidth()) {
+                                TextButton(
+                                    onClick = { calendarExpanded = !calendarExpanded },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            "تقویم ماهانه شیفت‌ها",
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Navy
+                                        )
+                                        Text(if (calendarExpanded) "▲" else "▼", color = Navy)
+                                    }
+                                }
+                                if (calendarExpanded) {
+                                    MonthlyShiftCalendar(
+                                        year = year.toIntOrNull() ?: 1405,
+                                        month = month.toIntOrNull() ?: 1,
+                                        shifts = filtered,
+                                        onSelectDay = { selectedDay -> date = selectedDay.toString() }
+                                    )
+                                }
                             }
-                        )
+                        }
 
                         HorizontalDivider()
 
@@ -837,21 +856,37 @@ fun ShiftYarApp(context: Context) {
     if (showContact) {
         AlertDialog(
             onDismissRequest = { showContact = false },
-            title = { Text("تماس با ما") },
+            title = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("تماس با ما", color = Navy, fontWeight = FontWeight.Bold)
+                    Text("پیشنهادها و پرسش‌های شما به بهتر شدن شیفت‌یار کمک می‌کند.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                }
+            },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("حسین شیخی")
-                    Text("کارشناس ارشد پرستاری اورژانس")
-                    Text("سمنان")
-                    Text("وب‌سایت: www.iranianems.ir")
-                    Text("ایتا: eitaa.com/iranianems")
+                Column(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 540.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Card(colors = CardDefaults.cardColors(containerColor = PaleBlue), shape = RoundedCornerShape(16.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Text("حسین شیخی", fontWeight = FontWeight.Bold, color = Navy)
+                            Text("کارشناس ارشد پرستاری اورژانس", style = MaterialTheme.typography.bodyMedium)
+                            Text("سمنان  •  پشتیبانی شیفت‌یار", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
+                            Text("وب‌سایت: www.iranianems.ir", color = Blue, style = MaterialTheme.typography.bodyMedium)
+                            Text("ایتا: eitaa.com/iranianems", color = Blue, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showContact = false }) {
-                    Text("بستن")
-                }
-            }
+                TextButton(onClick = {
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.iranianems.ir"))
+                    try { context.startActivity(intent) } catch (_: Exception) {
+                        Toast.makeText(context, "امکان باز کردن وب‌سایت وجود ندارد.", Toast.LENGTH_LONG).show()
+                    }
+                }) { Text("مشاهده وب‌سایت") }
+            },
+            dismissButton = { TextButton(onClick = { showContact = false }) { Text("بستن") } }
         )
     }
 
@@ -985,6 +1020,38 @@ fun MonthlyShiftCalendar(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun DashboardMetric(title: String, value: String, symbol: String, modifier: Modifier = Modifier, accent: Color = Blue) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.End) {
+            Text(symbol, style = MaterialTheme.typography.titleLarge)
+            Text(value, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = accent)
+            Text(title, style = MaterialTheme.typography.bodyMedium, color = Color(0xFF526477))
+        }
+    }
+}
+
+@Composable
+fun DashboardAction(title: String, subtitle: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = PaleBlue),
+        onClick = onClick
+    ) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("↗", color = Blue, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(title, color = Navy, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+            Text(subtitle, color = Color(0xFF526477), style = MaterialTheme.typography.bodySmall)
         }
     }
 }
@@ -1188,9 +1255,9 @@ fun exportMonthlyPdf(
         @page { size: A4 portrait; margin: 7mm; }
         * { box-sizing: border-box; }
         body { font-family: sans-serif; direction: rtl; color:#111; margin:0; }
-        h1 { text-align:right; width:78%; margin-right:0; margin-left:auto; font-size:13px; margin-bottom:5px; color:#111; }
-        .sub { text-align:right; width:78%; margin-right:0; margin-left:auto; font-weight:bold; font-size:10px; margin-bottom:7px; }
-        table { width:78%; margin-right:0; margin-left:auto; border-collapse:collapse; table-layout:fixed; }
+        h1 { text-align:right; width:68%; margin-right:0; margin-left:auto; font-size:13px; margin-bottom:5px; color:#111; }
+        .sub { text-align:right; width:68%; margin-right:0; margin-left:auto; font-weight:bold; font-size:10px; margin-bottom:7px; }
+        table { width:68%; margin-right:0; margin-left:auto; border-collapse:collapse; table-layout:fixed; }
         th, td { border:1px solid #555; text-align:center; vertical-align:middle; overflow-wrap:anywhere; }
         th { padding:4px 1px; font-size:9px; background:#f0f3f6; }
         td { padding:3px 1px; height:20px; font-size:8px; }
