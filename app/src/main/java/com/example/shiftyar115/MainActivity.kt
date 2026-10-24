@@ -136,10 +136,6 @@ fun ShiftYarApp(context: Context) {
     var shiftMode by remember { mutableStateOf("۲۴ ساعته") }
     var unavailableRules by remember { mutableStateOf(prefs.getString("unavailable_rules", "") ?: "") }
     var requiredRules by remember { mutableStateOf(prefs.getString("required_rules", "") ?: "") }
-    var rulePerson by remember { mutableStateOf("") }
-    var ruleDays by remember { mutableStateOf("") }
-    var ruleUnavailable by remember { mutableStateOf(true) }
-    var personMenuExpanded by remember { mutableStateOf(false) }
     var shiftType by remember { mutableStateOf("۲۴ ساعته") }
     var firstPerson by remember { mutableStateOf("") }
     var secondPerson by remember { mutableStateOf("") }
@@ -482,9 +478,7 @@ fun ShiftYarApp(context: Context) {
                         )
 
                         val previewDate = "${year.trim()}/${month.toIntOrNull()?.toString()?.padStart(2, '0') ?: "01"}/${date.toIntOrNull()?.toString()?.padStart(2, '0') ?: "01"}"
-                        if ((date.toIntOrNull() ?: 0) in 1..31 &&
-                            year.toIntOrNull() != null &&
-                            (month.toIntOrNull() ?: 0) in 1..12) {
+                        if (date.toIntOrNull() in 1..31 && year.toIntOrNull() != null && month.toIntOrNull() in 1..12) {
                             Text(
                                 "روز هفته: ${weekdayForJalali(previewDate)}",
                                 color = Navy,
@@ -518,9 +512,8 @@ fun ShiftYarApp(context: Context) {
                                 val dayNumber = date.toIntOrNull()
                                 val monthNumber = month.toIntOrNull()
                                 val yearNumber = year.toIntOrNull()
-                                val validMonth = (monthNumber ?: 0) in 1..12
-                                val safeMonth = monthNumber ?: 0
-                                val maxDay = if (safeMonth in 1..6) 31 else if (safeMonth in 7..11) 30 else 30
+                                val validMonth = monthNumber in 1..12
+                                val maxDay = if (monthNumber in 1..6) 31 else if (monthNumber in 7..11) 30 else 30
                                 val validDate = dayNumber != null && dayNumber in 1..maxDay
                                 val cleanDate = "${yearNumber ?: 0}/${monthNumber?.toString()?.padStart(2, '0') ?: "00"}/${dayNumber?.toString()?.padStart(2, '0') ?: "00"}"
 
@@ -602,39 +595,7 @@ fun ShiftYarApp(context: Context) {
 
                         HorizontalDivider()
                         Text("برنامه‌ریزی هوشمند", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy)
-                        Text("نام فرد را از فهرست انتخاب کنید و روزها را وارد کنید؛ سپس دکمه افزودن را بزنید.", style = MaterialTheme.typography.bodySmall)
-                        Box(Modifier.fillMaxWidth()) {
-                            OutlinedButton(onClick = { personMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
-                                Text(if (rulePerson.isBlank()) "انتخاب نام پرسنل" else rulePerson)
-                            }
-                            DropdownMenu(expanded = personMenuExpanded, onDismissRequest = { personMenuExpanded = false }) {
-                                personnel.forEach { name -> DropdownMenuItem(text = { Text(name) }, onClick = { rulePerson = name; personMenuExpanded = false }) }
-                            }
-                        }
-                        OutlinedTextField(value = ruleDays, onValueChange = { ruleDays = it }, label = { Text("شماره روزها (مثلاً ۳،۷،۱۲)") }, modifier = Modifier.fillMaxWidth())
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(selected = ruleUnavailable, onClick = { ruleUnavailable = true })
-                            Text("عدم حضور")
-                            Spacer(Modifier.width(12.dp))
-                            RadioButton(selected = !ruleUnavailable, onClick = { ruleUnavailable = false })
-                            Text("حضور اجباری")
-                        }
-                        Button(onClick = {
-                            val days = ruleDays.split(",", "،", " ").mapNotNull { it.trim().toIntOrNull() }.filter { it in 1..31 }.distinct()
-                            if (rulePerson.isBlank() || days.isEmpty()) {
-                                Toast.makeText(context, "نام پرسنل و شماره روز معتبر را انتخاب کنید", Toast.LENGTH_SHORT).show()
-                            } else {
-                                val line = "$rulePerson:${days.joinToString(",")}" 
-                                if (ruleUnavailable) {
-                                    unavailableRules = (unavailableRules.lines().filter { it.substringBefore(":").trim() != rulePerson } + line).filter { it.isNotBlank() }.joinToString("\n")
-                                    prefs.edit().putString("unavailable_rules", unavailableRules).apply()
-                                } else {
-                                    requiredRules = (requiredRules.lines().filter { it.substringBefore(":").trim() != rulePerson } + line).filter { it.isNotBlank() }.joinToString("\n")
-                                    prefs.edit().putString("required_rules", requiredRules).apply()
-                                }
-                                ruleDays = ""
-                            }
-                        }, modifier = Modifier.fillMaxWidth()) { Text("افزودن روزها برای فرد انتخاب‌شده") }
+                        Text("قالب هر خط: نام پرسنل:شماره روزها؛ روزها را با ویرگول جدا کنید. مثال: علی رضایی:۳,۷,۱۲", style = MaterialTheme.typography.bodySmall)
                         OutlinedTextField(
                             value = unavailableRules,
                             onValueChange = { unavailableRules = it; prefs.edit().putString("unavailable_rules", it).apply() },
@@ -653,7 +614,7 @@ fun ShiftYarApp(context: Context) {
                             onClick = {
                                 val yy = year.toIntOrNull()
                                 val mm = month.toIntOrNull()
-                                if (personnel.size < 2 || yy == null || mm == null || mm !in 1..12) {
+                                if (personnel.size < 2 || yy == null || mm !in 1..12) {
                                     Toast.makeText(context, "سال، ماه معتبر و حداقل دو پرسنل لازم است", Toast.LENGTH_LONG).show()
                                 } else {
                                     val maxDay = if (mm <= 6) 31 else if (mm <= 11) 30 else 30
@@ -1150,21 +1111,28 @@ fun exportMonthlyPdf(
     fun esc(value: String) = value.replace("&", "&amp;")
         .replace("<", "&lt;").replace(">", "&gt;")
 
-    val grouped = filtered.groupBy { it.date }.toSortedMap(compareBy<String> { dateText ->
-        dateText.split("/").getOrNull(2)?.toIntOrNull() ?: 0
-    })
-    val rows = grouped.entries.joinToString("") { (dateText, entries) ->
-        val morning = entries.firstOrNull { it.type == "صبح" || it.type.lowercase().contains("morning") }
-        val night = entries.firstOrNull { it.type == "شب" || it.type.lowercase().contains("night") }
-        val fullDay = entries.firstOrNull { it.type == "۲۴ ساعته" || it.type == "24h" }
-        fun cell(value: String) = if (value.isBlank()) "—" else esc(value)
-        val dayName = esc(weekdayForJalali(dateText))
-        """<tr>
-            <td class="date">${esc(dateText)}<br/><span>$dayName</span></td>
-            <td>${cell(morning?.first ?: fullDay?.first.orEmpty())}</td>
-            <td>${cell(morning?.second ?: fullDay?.second.orEmpty())}</td>
-            <td>${cell(night?.first.orEmpty())}</td>
-            <td>${cell(night?.second.orEmpty())}</td>
+    val byDay = filtered.groupBy { it.date.substringAfterLast("/").toIntOrNull() ?: 0 }
+    val maxDay = if ((month.toIntOrNull() ?: 1) <= 6) 31 else 30
+    val rows = (1..maxDay).joinToString("") { day ->
+        val dayEntries = byDay[day].orEmpty()
+        val morning = dayEntries.firstOrNull {
+            it.type == "صبح" || it.type.lowercase().contains("morning")
+        } ?: dayEntries.firstOrNull { it.type == "۲۴ ساعته" || it.type == "24h" }
+        val night = dayEntries.firstOrNull {
+            it.type == "شب" || it.type.lowercase().contains("night")
+        } ?: dayEntries.firstOrNull { it.type == "۲۴ ساعته" || it.type == "24h" }
+        val dateText = "$year/${month.toIntOrNull()?.toString()?.padStart(2, '0')}/${
+            day.toString().padStart(2, '0')
+        }"
+        val weekday = weekdayForJalali(dateText)
+        val friday = weekday == "جمعه"
+        """<tr class="${if (friday) "friday" else if (day % 2 == 0) "even" else ""}">
+            <td class="date">$day/${month.toIntOrNull()?.toString()?.padStart(2, '0')}</td>
+            <td class="weekday">${esc(weekday)}</td>
+            <td>${morning?.let { esc(it.first) } ?: ""}</td>
+            <td>${morning?.let { esc(it.second) } ?: ""}</td>
+            <td>${night?.let { esc(it.first) } ?: ""}</td>
+            <td>${night?.let { esc(it.second) } ?: ""}</td>
         </tr>"""
     }
     val html = """
@@ -1173,23 +1141,41 @@ fun exportMonthlyPdf(
         <head><meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
-        @page { size: A4 landscape; margin: 5mm; }
+        @page { size: A4 portrait; margin: 7mm; }
         * { box-sizing: border-box; }
-        body { font-family: sans-serif; direction: rtl; color: #18324d; font-size: 10px; margin:0; }
-        h1 { text-align:center; color:#123A67; font-size:17px; margin: 2px 0 4px; font-weight:700; }
-        .sub { text-align:center; margin-bottom:7px; font-size:10px; }
+        body { font-family: sans-serif; direction: rtl; color:#111; margin:0; }
+        h1 { text-align:center; font-size:13px; margin:0 0 5px; color:#111; }
+        .sub { text-align:center; font-weight:bold; font-size:10px; margin-bottom:7px; }
         table { width:100%; border-collapse:collapse; table-layout:fixed; }
-        th { background:#123A67; color:white; padding:5px 3px; font-size:10px; }
-        td { border:1px solid #9eb3c8; padding:4px 2px; text-align:center; font-size:10px; line-height:1.15; overflow-wrap:anywhere; }
-        tr:nth-child(even) { background:#edf5fb; } tr { page-break-inside: avoid; }
-        td.date { width:14%; font-weight:bold; }
-        span { color:#087f78; font-weight:bold; }
+        th, td { border:1px solid #555; text-align:center; vertical-align:middle; overflow-wrap:anywhere; }
+        th { padding:4px 1px; font-size:9px; background:#f0f3f6; }
+        td { padding:3px 1px; height:20px; font-size:8px; }
+        .group { background:#dce8f5; font-size:10px; font-weight:bold; }
+        .date { width:11%; font-weight:bold; }
+        .weekday { width:16%; }
+        .friday td { color:#b00020; font-weight:bold; }
+        tr.even td { background:#edf5fb; }
+        .blank { background:#fff; }
+        .name { font-weight:bold; }
         </style></head>
         <body>
-        <h1>${esc(baseName.ifBlank { "نام پایگاه بهره‌وری اورژانس ۱۱۵ ثبت نشده" })}</h1>
-        <div class="sub">گزارش ماهانه شیفت‌یار اورژانس ۱۱۵ | ماه: ${esc(year)}/${esc(month)}</div>
-        <table><thead><tr><th>تاریخ و روز هفته</th><th>صبح - نفر اول</th><th>صبح - نفر دوم</th><th>شب - نفر اول</th><th>شب - نفر دوم</th></tr></thead>
-        <tbody>$rows</tbody></table>
+        <h1>برنامه شیفت ماهانه پایگاه ${esc(baseName.ifBlank { "ثبت نشده" })}</h1>
+        <div class="sub">اورژانس پیش‌بیمارستانی ۱۱۵ | ماه ${esc(year)}/${esc(month)}</div>
+        <table>
+          <thead>
+            <tr>
+              <th rowspan="2" class="date">تاریخ</th>
+              <th rowspan="2" class="weekday">روز هفته</th>
+              <th colspan="2" class="group">شیفت صبح</th>
+              <th colspan="2" class="group">شیفت شب</th>
+            </tr>
+            <tr>
+              <th>نفر اول</th><th>نفر دوم</th>
+              <th>نفر اول</th><th>نفر دوم</th>
+            </tr>
+          </thead>
+          <tbody>$rows</tbody>
+        </table>
         </body></html>
     """.trimIndent()
 
@@ -1207,7 +1193,7 @@ fun exportMonthlyPdf(
                 "گزارش شیفت‌یار ${year}/${month}",
                 adapter,
                 PrintAttributes.Builder()
-                    .setMediaSize(PrintAttributes.MediaSize.ISO_A4.asLandscape())
+                    .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
                     .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
                     .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
                     .build()
