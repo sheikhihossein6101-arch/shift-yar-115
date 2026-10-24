@@ -136,6 +136,10 @@ fun ShiftYarApp(context: Context) {
     var shiftMode by remember { mutableStateOf("۲۴ ساعته") }
     var unavailableRules by remember { mutableStateOf(prefs.getString("unavailable_rules", "") ?: "") }
     var requiredRules by remember { mutableStateOf(prefs.getString("required_rules", "") ?: "") }
+    var rulePerson by remember { mutableStateOf("") }
+    var ruleDays by remember { mutableStateOf(setOf(3, 7, 12)) }
+    var ruleType by remember { mutableStateOf("عدم حضور") }
+    var ruleMenuExpanded by remember { mutableStateOf(false) }
     var shiftType by remember { mutableStateOf("۲۴ ساعته") }
     var firstPerson by remember { mutableStateOf("") }
     var secondPerson by remember { mutableStateOf("") }
@@ -595,21 +599,55 @@ fun ShiftYarApp(context: Context) {
 
                         HorizontalDivider()
                         Text("برنامه‌ریزی هوشمند", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy)
-                        Text("قالب هر خط: نام پرسنل:شماره روزها؛ روزها را با ویرگول جدا کنید. مثال: علی رضایی:۳,۷,۱۲", style = MaterialTheme.typography.bodySmall)
-                        OutlinedTextField(
-                            value = unavailableRules,
-                            onValueChange = { unavailableRules = it; prefs.edit().putString("unavailable_rules", it).apply() },
-                            label = { Text("عدم حضور (هر خط یک نفر)") },
-                            placeholder = { Text("علی رضایی:۳,۷,۱۲") },
-                            modifier = Modifier.fillMaxWidth(), minLines = 2
-                        )
-                        OutlinedTextField(
-                            value = requiredRules,
-                            onValueChange = { requiredRules = it; prefs.edit().putString("required_rules", it).apply() },
-                            label = { Text("حضور اجباری در روزهای مشخص") },
-                            placeholder = { Text("مریم احمدی:۵,۱۸") },
-                            modifier = Modifier.fillMaxWidth(), minLines = 2
-                        )
+                        Text("نام فرد را انتخاب کن و روزهای موردنظر را لمس کن.", style = MaterialTheme.typography.bodySmall)
+                        Box {
+                            OutlinedButton(onClick = { ruleMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                                Text(if (rulePerson.isBlank()) "انتخاب از فهرست پرسنل" else rulePerson)
+                            }
+                            DropdownMenu(expanded = ruleMenuExpanded, onDismissRequest = { ruleMenuExpanded = false }) {
+                                personnel.forEach { name ->
+                                    DropdownMenuItem(text = { Text(name) }, onClick = { rulePerson = name; ruleMenuExpanded = false })
+                                }
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            FilterChip(selected = ruleType == "عدم حضور", onClick = { ruleType = "عدم حضور" }, label = { Text("عدم حضور") })
+                            FilterChip(selected = ruleType == "حضور اجباری", onClick = { ruleType = "حضور اجباری" }, label = { Text("حضور اجباری") })
+                        }
+                        Text("انتخاب روزهای ماه", fontWeight = FontWeight.SemiBold)
+                        val ruleMaxDay = if ((month.toIntOrNull() ?: 7) <= 6) 31 else 30
+                        (1..ruleMaxDay).toList().chunked(7).forEach { rowDays ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.fillMaxWidth()) {
+                                rowDays.forEach { day ->
+                                    FilterChip(
+                                        selected = day in ruleDays,
+                                        onClick = { ruleDays = if (day in ruleDays) ruleDays - day else ruleDays + day },
+                                        label = { Text(day.toString()) }
+                                    )
+                                }
+                            }
+                        }
+                        Button(onClick = {
+                            if (rulePerson.isBlank()) {
+                                Toast.makeText(context, "ابتدا نام پرسنل را انتخاب کن", Toast.LENGTH_SHORT).show()
+                            } else {
+                                fun updateRule(raw: String, name: String, days: Set<Int>): String {
+                                    val lines = raw.lines().filterNot { it.substringBefore(":").trim().equals(name, true) && it.contains(":") }.toMutableList()
+                                    if (days.isNotEmpty()) lines.add("$name:" + days.sorted().joinToString(","))
+                                    return lines.filter { it.isNotBlank() }.joinToString("\n")
+                                }
+                                if (ruleType == "عدم حضور") {
+                                    unavailableRules = updateRule(unavailableRules, rulePerson, ruleDays)
+                                    prefs.edit().putString("unavailable_rules", unavailableRules).apply()
+                                } else {
+                                    requiredRules = updateRule(requiredRules, rulePerson, ruleDays)
+                                    prefs.edit().putString("required_rules", requiredRules).apply()
+                                }
+                                Toast.makeText(context, "محدودیت روزهای $rulePerson ذخیره شد", Toast.LENGTH_SHORT).show()
+                            }
+                        }, modifier = Modifier.fillMaxWidth()) { Text("ذخیره محدودیت انتخاب‌شده") }
+                        Text("محدودیت‌های عدم حضور: ${unavailableRules.ifBlank { "ثبت نشده" }}", style = MaterialTheme.typography.bodySmall)
+                        Text("حضور اجباری: ${requiredRules.ifBlank { "ثبت نشده" }}", style = MaterialTheme.typography.bodySmall)
                         Button(
                             onClick = {
                                 val yy = year.toIntOrNull()
@@ -1150,9 +1188,9 @@ fun exportMonthlyPdf(
         @page { size: A4 portrait; margin: 7mm; }
         * { box-sizing: border-box; }
         body { font-family: sans-serif; direction: rtl; color:#111; margin:0; }
-        h1 { text-align:center; font-size:13px; margin:0 0 5px; color:#111; }
-        .sub { text-align:center; font-weight:bold; font-size:10px; margin-bottom:7px; }
-        table { width:100%; border-collapse:collapse; table-layout:fixed; }
+        h1 { text-align:right; width:78%; margin-right:0; margin-left:auto; font-size:13px; margin-bottom:5px; color:#111; }
+        .sub { text-align:right; width:78%; margin-right:0; margin-left:auto; font-weight:bold; font-size:10px; margin-bottom:7px; }
+        table { width:78%; margin-right:0; margin-left:auto; border-collapse:collapse; table-layout:fixed; }
         th, td { border:1px solid #555; text-align:center; vertical-align:middle; overflow-wrap:anywhere; }
         th { padding:4px 1px; font-size:9px; background:#f0f3f6; }
         td { padding:3px 1px; height:20px; font-size:8px; }
