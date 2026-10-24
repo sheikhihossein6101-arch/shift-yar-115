@@ -12,8 +12,10 @@ import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -45,6 +47,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -86,48 +90,19 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun SplashScreen() {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0D47A1))
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+            .background(Color(0xFF0D47A1)),
+        contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = "✚",
-            color = Color.White,
-            style = MaterialTheme.typography.displayLarge
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = "شیفت‌یار اورژانس ۱۱۵",
-            color = Color.White,
-            style = MaterialTheme.typography.headlineMedium,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text(
-            text = "سامانه مدیریت شیفت‌های اورژانس",
-            color = Color.White,
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(36.dp))
-
-        CircularProgressIndicator(color = Color.White)
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "در حال ورود به برنامه...",
-            color = Color.White,
-            style = MaterialTheme.typography.bodyMedium
+        Image(
+            painter = painterResource(
+                id = R.drawable.shiftyar
+            ),
+            contentDescription = "صفحه ورود شیفت‌یار اورژانس ۱۱۵",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Fit
         )
     }
 }
@@ -329,17 +304,14 @@ fun ShiftYarApp(context: Context) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor =
-                            MaterialTheme.colorScheme.surfaceVariant
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
                     )
                 ) {
                     Column(
                         modifier = Modifier.padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        Text(
-                            "پایگاه: ${baseName.ifBlank { "ثبت نشده" }}"
-                        )
+                        Text("پایگاه: ${baseName.ifBlank { "ثبت نشده" }}")
                         Text("تاریخ: ${shift.date}")
                         Text("ساعت: ${shift.start} تا ${shift.end}")
 
