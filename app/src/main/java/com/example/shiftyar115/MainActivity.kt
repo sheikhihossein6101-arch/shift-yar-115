@@ -12,6 +12,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -22,12 +24,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 
 private val Navy = Color(0xFF123A67)
 private val Blue = Color(0xFF1769AA)
@@ -122,6 +126,7 @@ fun ShiftYarApp(context: Context) {
         mutableStateOf(prefs.getString("base_name", "") ?: "")
     }
     var selectedPage by remember { mutableStateOf("خانه") }
+    var drawerOpen by remember { mutableStateOf(false) }
     var showExit by remember { mutableStateOf(false) }
     var showContact by remember { mutableStateOf(false) }
 
@@ -438,45 +443,28 @@ fun ShiftYarApp(context: Context) {
                             singleLine = true
                         )
 
-                        var modeExpanded by remember { mutableStateOf(false) }
-
-                        ExposedDropdownMenuBox(
-                            expanded = modeExpanded,
-                            onExpandedChange = { modeExpanded = it }
+                        Text(
+                            "نوع شیفت",
+                            color = Navy,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            OutlinedTextField(
-                                value = shiftMode,
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("الگوی شیفت") },
-                                trailingIcon = {
-                                    ExposedDropdownMenuDefaults.TrailingIcon(
-                                        expanded = modeExpanded
-                                    )
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .menuAnchor()
-                            )
-
-                            ExposedDropdownMenu(
-                                expanded = modeExpanded,
-                                onDismissRequest = { modeExpanded = false }
-                            ) {
-                                listOf("۲۴ ساعته", "۱۲ ساعته").forEach {
-                                    DropdownMenuItem(
-                                        text = { Text(it) },
-                                        onClick = {
-                                            shiftMode = it
-                                            shiftType = if (it == "۲۴ ساعته") {
-                                                "۲۴ ساعته"
-                                            } else {
-                                                "صبح"
-                                            }
-                                            modeExpanded = false
+                            listOf("۲۴ ساعته", "صبح", "شب").forEach { type ->
+                                FilterChip(
+                                    selected = shiftType == type,
+                                    onClick = {
+                                        shiftType = type
+                                        shiftMode = if (type == "۲۴ ساعته") {
+                                            "۲۴ ساعته"
+                                        } else {
+                                            "۱۲ ساعته"
                                         }
-                                    )
-                                }
+                                    },
+                                    label = { Text(type) }
+                                )
                             }
                         }
 
@@ -511,20 +499,6 @@ fun ShiftYarApp(context: Context) {
                             )
                         }
 
-                        if (shiftMode == "۱۲ ساعته") {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                listOf("صبح", "شب").forEach { type ->
-                                    FilterChip(
-                                        selected = shiftType == type,
-                                        onClick = { shiftType = type },
-                                        label = { Text("شیفت $type") }
-                                    )
-                                }
-                            }
-                        }
-
                         if (personnel.size < 2) {
                             Text(
                                 "ابتدا در بخش مدیریت پرسنل حداقل دو نفر ثبت کنید.",
@@ -552,6 +526,7 @@ fun ShiftYarApp(context: Context) {
                                 val monthNumber = month.toIntOrNull()
                                 val yearNumber = year.toIntOrNull()
                                 val validMonth = monthNumber in 1..12
+
                                 val maxDay =
                                     if (monthNumber in 1..6) 31
                                     else if (monthNumber in 7..11) 30
@@ -593,11 +568,7 @@ fun ShiftYarApp(context: Context) {
                                 } else {
                                     val entry = ShiftEntry(
                                         cleanDate,
-                                        if (shiftMode == "۲۴ ساعته") {
-                                            "۲۴ ساعته"
-                                        } else {
-                                            shiftType
-                                        },
+                                        shiftType,
                                         firstPerson,
                                         secondPerson
                                     )
@@ -738,7 +709,6 @@ fun ShiftYarApp(context: Context) {
                                         ) {
                                             Text("ویرایش")
                                         }
-
                                         TextButton(
                                             onClick = {
                                                 shifts.removeAt(actualIndex)
@@ -766,9 +736,7 @@ fun ShiftYarApp(context: Context) {
             onDismissRequest = { showContact = false },
             title = { Text("تماس با ما") },
             text = {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("حسین شیخی")
                     Text("کارشناس ارشد پرستاری اورژانس")
                     Text("سمنان")
@@ -887,40 +855,54 @@ fun MonthlyShiftCalendar(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(8.dp),
                                     colors = CardDefaults.cardColors(
-                                        containerColor = if (dayShifts.isEmpty()) {
-                                            PaleBlue
-                                        } else {
-                                            Color(0xFFDDF4E8)
-                                        }
+                                        containerColor =
+                                            if (dayShifts.isEmpty()) PaleBlue
+                                            else Color(0xFFDDF4E8)
                                     )
                                 ) {
                                     Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(4.dp),
-                                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                                            .padding(3.dp),
+                                        verticalArrangement =
+                                            Arrangement.spacedBy(2.dp)
                                     ) {
-                                        Text(
-                                            day.toString(),
-                                            color = Navy,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                        Row(
+                                            verticalAlignment =
+                                                Alignment.CenterVertically,
+                                            horizontalArrangement =
+                                                Arrangement.spacedBy(3.dp)
+                                        ) {
+                                            Text(
+                                                day.toString(),
+                                                color = Navy,
+                                                fontWeight = FontWeight.Bold
+                                            )
+
+                                            if (dayShifts.isNotEmpty()) {
+                                                Text(
+                                                    dayShifts.first().first,
+                                                    style = MaterialTheme
+                                                        .typography.labelSmall,
+                                                    color = Navy,
+                                                    maxLines = 1
+                                                )
+                                            }
+                                        }
 
                                         dayShifts.take(2).forEach { shift ->
                                             Text(
                                                 shift.type,
-                                                style = MaterialTheme.typography.labelSmall,
+                                                style = MaterialTheme
+                                                    .typography.labelSmall,
                                                 color = Teal,
                                                 maxLines = 1
                                             )
                                             Text(
-                                                shift.first,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                maxLines = 1
-                                            )
-                                            Text(
                                                 shift.second,
-                                                style = MaterialTheme.typography.labelSmall,
+                                                style = MaterialTheme
+                                                    .typography.labelSmall,
+                                                color = Blue,
                                                 maxLines = 1
                                             )
                                         }
@@ -928,7 +910,8 @@ fun MonthlyShiftCalendar(
                                         if (dayShifts.size > 2) {
                                             Text(
                                                 "+${dayShifts.size - 2}",
-                                                style = MaterialTheme.typography.labelSmall
+                                                style = MaterialTheme
+                                                    .typography.labelSmall
                                             )
                                         }
                                     }
@@ -1070,21 +1053,9 @@ fun jalaliToGregorian(jy: Int, jm: Int, jd: Int): IntArray {
 
     var gd = days + 1
     val leap = gy % 4 == 0 && (gy % 100 != 0 || gy % 400 == 0)
-
     val monthDays = intArrayOf(
-        0,
-        31,
-        if (leap) 29 else 28,
-        31,
-        30,
-        31,
-        30,
-        31,
-        31,
-        30,
-        31,
-        30,
-        31
+        0, 31, if (leap) 29 else 28, 31, 30, 31, 30,
+        31, 31, 30, 31, 30, 31
     )
 
     var gm = 1
@@ -1144,59 +1115,24 @@ fun exportMonthlyPdf(
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
         @page { size: A4 landscape; margin: 14mm; }
-        body {
-            font-family: sans-serif;
-            direction: rtl;
-            color: #18324d;
-        }
-        h1 {
-            text-align: center;
-            color: #123A67;
-            font-size: 22px;
-        }
-        .sub {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th {
-            background: #123A67;
-            color: white;
-            padding: 10px;
-        }
-        td {
-            border: 1px solid #b8c8d8;
-            padding: 9px;
-            text-align: center;
-        }
-        tr:nth-child(even) {
-            background: #edf5fb;
-        }
-        span {
-            color: #087f78;
-            font-weight: bold;
-        }
+        body { font-family: sans-serif; direction: rtl; color: #18324d; }
+        h1 { text-align:center; color:#123A67; font-size:22px; }
+        .sub { text-align:center; margin-bottom:20px; }
+        table { width:100%; border-collapse:collapse; }
+        th { background:#123A67; color:white; padding:10px; }
+        td { border:1px solid #b8c8d8; padding:9px; text-align:center; }
+        tr:nth-child(even) { background:#edf5fb; }
+        span { color:#087f78; font-weight:bold; }
         </style>
         </head>
         <body>
         <h1>گزارش ماهانه شیفت‌یار اورژانس ۱۱۵</h1>
-        <div class="sub">
-            پایگاه: ${esc(baseName.ifBlank { "ثبت نشده" })} |
-            ماه: ${esc(year)}/${esc(month)}
-        </div>
+        <div class="sub">پایگاه: ${esc(baseName.ifBlank { "ثبت نشده" })} | ماه: ${esc(year)}/${esc(month)}</div>
         <table>
-          <thead>
-            <tr>
-              <th>تاریخ و روز هفته</th>
-              <th>نوع شیفت</th>
-              <th>نفر اول</th>
-              <th>نفر دوم</th>
-            </tr>
-          </thead>
-          <tbody>$rows</tbody>
+        <thead>
+        <tr><th>تاریخ و روز هفته</th><th>نوع شیفت</th><th>نفر اول</th><th>نفر دوم</th></tr>
+        </thead>
+        <tbody>$rows</tbody>
         </table>
         </body>
         </html>
@@ -1216,12 +1152,10 @@ fun exportMonthlyPdf(
 
     val webView = WebView(context)
     webView.settings.defaultTextEncodingName = "UTF-8"
-
     webView.webViewClient = object : WebViewClient() {
         override fun onPageFinished(view: WebView, url: String?) {
-            val adapter = view.createPrintDocumentAdapter(
-                "ShiftYar-${year}-${month}"
-            )
+            val adapter =
+                view.createPrintDocumentAdapter("ShiftYar-${year}-${month}")
 
             printManager.print(
                 "گزارش شیفت‌یار ${year}/${month}",
