@@ -141,6 +141,7 @@ fun ShiftYarApp(context: Context) {
     var ruleType by remember { mutableStateOf("عدم حضور") }
     var ruleMenuExpanded by remember { mutableStateOf(false) }
     var shiftType by remember { mutableStateOf("۲۴ ساعته") }
+    var productivityBase by remember { mutableStateOf(prefs.getBoolean("productivity_base", false)) }
     var firstPerson by remember { mutableStateOf("") }
     var secondPerson by remember { mutableStateOf("") }
     var editIndex by remember { mutableIntStateOf(-1) }
@@ -449,6 +450,23 @@ fun ShiftYarApp(context: Context) {
                             singleLine = true
                         )
 
+                        Card(colors = CardDefaults.cardColors(containerColor = PaleBlue)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = productivityBase,
+                                    onCheckedChange = {
+                                        productivityBase = it
+                                        prefs.edit().putBoolean("productivity_base", it).apply()
+                                        if (!it && shiftType != "۲۴ ساعته") shiftType = "۲۴ ساعته"
+                                    }
+                                )
+                                Text("پایگاه بهره‌وری (امکان شیفت ۱۲ ساعته)", color = Navy)
+                            }
+                        }
+
                         Text(
                             "نوع شیفت",
                             color = Navy,
@@ -458,7 +476,7 @@ fun ShiftYarApp(context: Context) {
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            listOf("۲۴ ساعته", "صبح", "شب").forEach { type ->
+                            (if (productivityBase) listOf("۲۴ ساعته", "صبح", "شب") else listOf("۲۴ ساعته")).forEach { type ->
                                 FilterChip(
                                     selected = shiftType == type,
                                     onClick = {
@@ -1223,6 +1241,15 @@ fun exportMonthlyPdf(
         .replace("<", "&lt;").replace(">", "&gt;")
 
     val byDay = filtered.groupBy { it.date.substringAfterLast("/").toIntOrNull() ?: 0 }
+    val personPalette = listOf("#DCEBFF", "#DDF5E8", "#FFE8D6", "#F0E2FF", "#FFF2B8", "#D9F4F4", "#FFDDE5", "#E8E8E8")
+    val people = filtered.flatMap { listOf(it.first, it.second) }.filter { it.isNotBlank() }.distinct().sorted()
+    val personClass = people.mapIndexed { index, name -> name to "person${index % personPalette.size}" }.toMap()
+    fun personCell(name: String?): String {
+        if (name.isNullOrBlank()) return "<td></td>"
+        val cls = personClass[name] ?: ""
+        return "<td class=\"$cls name\">${esc(name)}</td>"
+    }
+    val personCss = people.mapIndexed { index, name -> ".person${index % personPalette.size} { background:${personPalette[index % personPalette.size]}; font-weight:bold; }" }.distinct().joinToString("\n")
     val maxDay = if ((month.toIntOrNull() ?: 1) <= 6) 31 else 30
     val rows = (1..maxDay).joinToString("") { day ->
         val dayEntries = byDay[day].orEmpty()
@@ -1240,12 +1267,14 @@ fun exportMonthlyPdf(
         """<tr class="${if (friday) "friday" else if (day % 2 == 0) "even" else ""}">
             <td class="date">$day/${month.toIntOrNull()?.toString()?.padStart(2, '0')}</td>
             <td class="weekday">${esc(weekday)}</td>
-            <td>${morning?.let { esc(it.first) } ?: ""}</td>
-            <td>${morning?.let { esc(it.second) } ?: ""}</td>
-            <td>${night?.let { esc(it.first) } ?: ""}</td>
-            <td>${night?.let { esc(it.second) } ?: ""}</td>
+            ${personCell(morning?.first)}
+            ${personCell(morning?.second)}
+            ${personCell(night?.first)}
+            ${personCell(night?.second)}
         </tr>"""
     }
+    val monthNames = listOf("فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند")
+    val monthLabel = monthNames.getOrNull((month.toIntOrNull() ?: 1) - 1) ?: month
     val html = """
         <!doctype html>
         <html lang="fa" dir="rtl">
@@ -1255,9 +1284,9 @@ fun exportMonthlyPdf(
         @page { size: A4 portrait; margin: 7mm; }
         * { box-sizing: border-box; }
         body { font-family: sans-serif; direction: rtl; color:#111; margin:0; }
-        h1 { text-align:right; width:68%; margin-right:0; margin-left:auto; font-size:13px; margin-bottom:5px; color:#111; }
-        .sub { text-align:right; width:68%; margin-right:0; margin-left:auto; font-weight:bold; font-size:10px; margin-bottom:7px; }
-        table { width:68%; margin-right:0; margin-left:auto; border-collapse:collapse; table-layout:fixed; }
+        h1 { text-align:right; width:60%; margin-right:0; margin-left:auto; font-size:13px; margin-bottom:5px; color:#111; }
+        .sub { text-align:right; width:60%; margin-right:0; margin-left:auto; font-weight:bold; font-size:10px; margin-bottom:7px; }
+        table { width:60%; margin-right:0; margin-left:auto; border-collapse:collapse; table-layout:fixed; }
         th, td { border:1px solid #555; text-align:center; vertical-align:middle; overflow-wrap:anywhere; }
         th { padding:4px 1px; font-size:9px; background:#f0f3f6; }
         td { padding:3px 1px; height:20px; font-size:8px; }
@@ -1268,10 +1297,11 @@ fun exportMonthlyPdf(
         tr.even td { background:#edf5fb; }
         .blank { background:#fff; }
         .name { font-weight:bold; }
+        $personCss
         </style></head>
         <body>
         <h1>برنامه شیفت ماهانه پایگاه ${esc(baseName.ifBlank { "ثبت نشده" })}</h1>
-        <div class="sub">اورژانس پیش‌بیمارستانی ۱۱۵ | ماه ${esc(year)}/${esc(month)}</div>
+        <div class="sub">اورژانس پیش‌بیمارستانی ۱۱۵ | برنامهٔ ماه ${esc(monthLabel)} ${esc(year)}</div>
         <table>
           <thead>
             <tr>
